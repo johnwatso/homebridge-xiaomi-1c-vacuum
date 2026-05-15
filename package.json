@@ -15,7 +15,7 @@
   "author": "john",
   "repository": {
     "type": "git",
-    "url": "https://github.com/john/1C-Matter.git"
+    "url": "git+https://github.com/johnwatso/homebridge-1c-matter.git"
   },
   "engines": {
     "node": "^18.15.0 || ^20.9.0 || ^22.11.0",

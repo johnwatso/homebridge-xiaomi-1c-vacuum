@@ -1,0 +1,11 @@
+# Exclude source files from NPM package
+src/
+tsconfig.json
+.gitignore
+npm-debug.log*
+
+# Include build artifacts
+dist/
+package.json
+README.md
+config.schema.json
