@@ -1,0 +1,42 @@
+{
+  "pluginAlias": "OneCMatter",
+  "pluginType": "platform",
+  "headerDisplay": "1C Matter - Xiaomi 1C Vacuum (Matter Native)",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "username": {
+        "title": "Xiaomi Account (Email/ID)",
+        "type": "string",
+        "required": true
+      },
+      "password": {
+        "title": "Xiaomi Password",
+        "type": "string",
+        "required": true,
+        "x-schema-form": {
+          "type": "password"
+        }
+      },
+      "country": {
+        "title": "Account Region",
+        "type": "string",
+        "default": "cn",
+        "enum": ["cn", "de", "us", "ru", "sg", "tw"],
+        "required": true
+      },
+      "deviceId": {
+        "title": "Device ID (DID)",
+        "type": "string",
+        "required": true,
+        "description": "The DID of your 1C vacuum. You can find this in the Mi Home app or via CLI tools."
+      },
+      "pollInterval": {
+        "title": "Polling Interval (seconds)",
+        "type": "integer",
+        "default": 30,
+        "minimum": 10
+      }
+    }
+  }
+}

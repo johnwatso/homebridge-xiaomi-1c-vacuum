@@ -1,0 +1,80 @@
+import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig } from 'homebridge';
+import { OneCVacuumAccessory } from './accessory.js';
+import { XiaomiCloudClient } from './mi-cloud.js';
+
+export class OneCMatterPlatform implements DynamicPlatformPlugin {
+  public readonly accessories: PlatformAccessory[] = [];
+  public client?: XiaomiCloudClient;
+
+  constructor(
+    public readonly log: Logger,
+    public readonly config: PlatformConfig,
+    public readonly api: API,
+  ) {
+    this.api.on('didFinishLaunching', async () => {
+      this.log.debug('Executed didFinishLaunching callback');
+      await this.discoverDevices();
+    });
+  }
+
+  configureAccessory(accessory: PlatformAccessory) {
+    this.log.info('Loading accessory from cache:', accessory.displayName);
+    this.accessories.push(accessory);
+  }
+
+  async discoverDevices() {
+    if (!this.config.username || !this.config.password || !this.config.deviceId) {
+      this.log.error('Missing configuration. Please check your config.json');
+      return;
+    }
+
+    this.client = new XiaomiCloudClient(this.log, this.config);
+    try {
+      await this.client.init();
+    } catch (e) {
+      return;
+    }
+
+    const uuid = this.api.hap.uuid.generate(this.config.deviceId);
+    
+    // Check if we should use Matter
+    if (this.api.isMatterEnabled()) {
+      this.log.info('Matter is enabled. Registering as Matter accessory.');
+      const matter = this.api.matter!;
+      
+      const accessory: any = {
+        UUID: uuid,
+        displayName: 'Xiaomi 1C Vacuum',
+        deviceType: matter.deviceTypes.RoboticVacuumCleaner,
+        manufacturer: 'Xiaomi',
+        model: '1C Vacuum (MC1808)',
+        serialNumber: this.config.deviceId,
+        context: { device: { did: this.config.deviceId } },
+        clusters: {
+          rvcOperationalState: {
+            operationalState: 0, // Stopped
+            operationalStateList: [
+              { operationalStateId: 0, operationalStateLabel: 'Stopped' },
+              { operationalStateId: 1, operationalStateLabel: 'Running' },
+              { operationalStateId: 2, operationalStateLabel: 'Paused' },
+              { operationalStateId: 3, operationalStateLabel: 'Error' },
+            ],
+          },
+          rvcRunMode: {
+            currentMode: 0,
+            supportedModes: [
+              { label: 'Idle', mode: 0, modeTags: [{ value: 0 }] },
+              { label: 'Cleaning', mode: 1, modeTags: [{ value: 1 }] },
+            ],
+          },
+        },
+      };
+
+      new OneCVacuumAccessory(this, accessory, this.client);
+      await matter.registerPlatformAccessories('homebridge-1c-matter', 'OneCMatter', [accessory]);
+    } else {
+      this.log.warn('Matter is NOT enabled. This plugin is optimized for Matter but will fallback to legacy mode if implemented.');
+      // Legacy fallback could be implemented here if desired, but user wants Matter.
+    }
+  }
+}
