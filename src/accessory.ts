@@ -1,12 +1,12 @@
 import { CharacteristicValue } from 'homebridge';
 import { OneCMatterPlatform } from './platform.js';
-import { XiaomiCloudClient } from './mi-cloud.js';
+import { XiaomiLocalClient } from './mi-local.js';
 
 export class OneCVacuumAccessory {
   constructor(
     private readonly platform: OneCMatterPlatform,
     private readonly accessory: any, // MatterAccessory
-    private readonly client: XiaomiCloudClient,
+    private readonly client: XiaomiLocalClient,
   ) {
     const matter = this.platform.api.matter!;
 
@@ -41,7 +41,7 @@ export class OneCVacuumAccessory {
     // Polling
     const interval = (this.platform.config.pollInterval || 30) * 1000;
     setInterval(() => this.updateStatus(), interval);
-    this.updateStatus(); // Initial update
+    setTimeout(() => this.updateStatus(), 5000); // Initial update after 5s delay
   }
 
   async updateStatus() {

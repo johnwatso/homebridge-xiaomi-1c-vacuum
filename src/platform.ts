@@ -1,10 +1,10 @@
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig } from 'homebridge';
 import { OneCVacuumAccessory } from './accessory.js';
-import { XiaomiCloudClient } from './mi-cloud.js';
+import { XiaomiLocalClient } from './mi-local.js';
 
 export class OneCMatterPlatform implements DynamicPlatformPlugin {
   public readonly accessories: PlatformAccessory[] = [];
-  public client?: XiaomiCloudClient;
+  public client?: XiaomiLocalClient;
 
   constructor(
     public readonly log: Logger,
@@ -23,12 +23,12 @@ export class OneCMatterPlatform implements DynamicPlatformPlugin {
   }
 
   async discoverDevices() {
-    if (!this.config.username || !this.config.password || !this.config.deviceId) {
-      this.log.error('Missing configuration. Please check your config.json');
+    if (!this.config.ip || !this.config.token) {
+      this.log.error('Missing Local LAN configuration (IP or Token). Please check your config.json');
       return;
     }
 
-    this.client = new XiaomiCloudClient(this.log, this.config);
+    this.client = new XiaomiLocalClient(this.log, this.config);
     try {
       await this.client.init();
     } catch (e) {
@@ -48,24 +48,29 @@ export class OneCMatterPlatform implements DynamicPlatformPlugin {
         deviceType: matter.deviceTypes.RoboticVacuumCleaner,
         manufacturer: 'Xiaomi',
         model: '1C Vacuum (MC1808)',
-        serialNumber: this.config.deviceId,
-        context: { device: { did: this.config.deviceId } },
+        serialNumber: this.config.deviceId, 
+        context: { device: { ip: this.config.ip, did: this.config.deviceId } },
         clusters: {
           rvcOperationalState: {
             operationalState: 0, // Stopped
             operationalStateList: [
-              { operationalStateId: 0, operationalStateLabel: 'Stopped' },
-              { operationalStateId: 1, operationalStateLabel: 'Running' },
-              { operationalStateId: 2, operationalStateLabel: 'Paused' },
-              { operationalStateId: 3, operationalStateLabel: 'Error' },
+              { operationalStateId: 0 }, // Stopped
+              { operationalStateId: 1 }, // Running
+              { operationalStateId: 2 }, // Paused
+              { operationalStateId: 3 }, // Error
+              { operationalStateId: 64 }, // SeekingCharger
             ],
           },
           rvcRunMode: {
             currentMode: 0,
             supportedModes: [
-              { label: 'Idle', mode: 0, modeTags: [{ value: 0 }] },
-              { label: 'Cleaning', mode: 1, modeTags: [{ value: 1 }] },
+              { label: 'Idle', mode: 0, modeTags: [{ value: 16384 }] }, // RvcRunMode.ModeTag.Idle
+              { label: 'Cleaning', mode: 1, modeTags: [{ value: 16385 }] }, // RvcRunMode.ModeTag.Cleaning
             ],
+          },
+          powerSource: {
+            batPercentRemaining: 200,
+            batChargeState: 0,
           },
         },
       };

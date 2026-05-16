@@ -1,35 +1,27 @@
 {
   "pluginAlias": "OneCMatter",
   "pluginType": "platform",
-  "headerDisplay": "1C Matter - Xiaomi 1C Vacuum (Matter Native)",
+  "headerDisplay": "1C Matter - Xiaomi 1C Vacuum (Matter Native - Local LAN)",
   "schema": {
     "type": "object",
     "properties": {
-      "username": {
-        "title": "Xiaomi Account (Email/ID)",
-        "type": "string",
-        "required": true
-      },
-      "password": {
-        "title": "Xiaomi Password",
+      "ip": {
+        "title": "Device IP Address",
         "type": "string",
         "required": true,
-        "x-schema-form": {
-          "type": "password"
-        }
+        "description": "The local IP address of your 1C vacuum (e.g., 192.168.1.50)."
       },
-      "country": {
-        "title": "Account Region",
+      "token": {
+        "title": "Device Token",
         "type": "string",
-        "default": "cn",
-        "enum": ["cn", "de", "us", "ru", "sg", "tw"],
-        "required": true
+        "required": true,
+        "description": "The 32-character local token for your vacuum."
       },
       "deviceId": {
         "title": "Device ID (DID)",
         "type": "string",
         "required": true,
-        "description": "The DID of your 1C vacuum. You can find this in the Mi Home app or via CLI tools."
+        "description": "The numeric Device ID of your vacuum (needed for local MIoT commands)."
       },
       "pollInterval": {
         "title": "Polling Interval (seconds)",
