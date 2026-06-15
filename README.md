@@ -22,6 +22,18 @@ Homebridge Xiaomi 1C Vacuum brings the Xiaomi Mi Robot Vacuum-Mop 1C (`dreame.va
 
 The plugin focuses on the controls that make sense in Apple Home: start, pause, resume, return to dock, suction mode, battery, charging state, fault status, consumable status, Siri, scenes, and automations. Your existing Xiaomi map, no-go zones, and saved cleaning rules remain managed by the Mi Home app and are respected by the vacuum during normal whole-home cleans.
 
+## Supported Models
+This plugin is built and tested for the Xiaomi Mi Robot Vacuum-Mop 1C.
+
+Known identifiers for the supported model:
+
+- Xiaomi Mi Robot Vacuum-Mop 1C
+- Xiaomi model `STYTJ01ZHM`
+- Dreame/MIoT model `dreame.vacuum.mc1808`
+- Hardware model `1C Vacuum (MC1808)`
+
+Other Xiaomi, Mi, Dreame, or Roborock vacuums may use different local MIoT properties and actions. They are not currently supported unless a matching model profile is added.
+
 ## Features
 - **Native HomeKit Vacuum Support:** Appears as a native vacuum in the Home app (iOS 18+ / Homebridge 2.0+).
 - **Local Control:** Bypasses Xiaomi Cloud for instant response and better privacy.
