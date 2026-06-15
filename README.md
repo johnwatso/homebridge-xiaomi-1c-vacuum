@@ -76,7 +76,18 @@ You can use the **[Xiaomi-Cloud-Tokens-Extractor](https://github.com/PiotrMachow
 ## Network Notes
 This plugin talks directly to the vacuum over the local Xiaomi miIO protocol on UDP port `54321`.
 
-If Homebridge is on a different VLAN or subnet from the vacuum, basic ping may work while miIO still times out. In that case, add a tightly scoped network rule for Homebridge to reach the vacuum on UDP `54321`. Some Xiaomi vacuums only respond reliably when the traffic appears to come from their own subnet; on UniFi, this can be handled with a small masquerade/source NAT rule from the Homebridge host to the vacuum on UDP `54321`.
+If Homebridge and the vacuum are on the same VLAN/subnet, no special network rules should normally be required.
+
+If they are on different VLANs or subnets, basic ping may work while miIO still times out. Allow the Homebridge host to reach the vacuum on UDP `54321`. Some Xiaomi vacuums only respond reliably when the request appears to come from their own subnet; if a normal allow rule is not enough, add a tightly scoped source NAT/masquerade rule for this traffic.
+
+| Setting | Value |
+| :--- | :--- |
+| Source | Homebridge host IP |
+| Destination | Vacuum IP |
+| Protocol | UDP |
+| Destination Port | `54321` |
+| Action | Allow |
+| If cross-subnet miIO still times out | Add source NAT/masquerade for this same source, destination, protocol, and port |
 
 You can test local connectivity outside Homebridge with:
 
