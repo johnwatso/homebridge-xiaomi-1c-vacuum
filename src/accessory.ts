@@ -80,16 +80,19 @@ export class OneCVacuumAccessory {
         pause: async () => {
           this.platform.log.info('Matter: Pause command');
           await this.client.doAction(3, 2); // Stop Sweep
+          await this.setOptimisticRunState(2, 0);
           this.scheduleStatusUpdate();
         },
         resume: async () => {
           this.platform.log.info('Matter: Resume command');
           await this.client.doAction(3, 1); // Start Sweep
+          await this.setOptimisticRunState(1, 1);
           this.scheduleStatusUpdate();
         },
         goHome: async () => {
           this.platform.log.info('Matter: Go Home command');
           await this.client.doAction(2, 1); // Start Charge
+          await this.setOptimisticRunState(64, 0);
           this.scheduleStatusUpdate();
         },
       },
@@ -98,8 +101,10 @@ export class OneCVacuumAccessory {
           this.platform.log.info('Matter: Change to mode', args.newMode);
           if (args.newMode === 1) {
             await this.client.doAction(3, 1); // Start Sweep
+            await this.setOptimisticRunState(1, 1);
           } else {
             await this.client.doAction(3, 2); // Stop Sweep
+            await this.setOptimisticRunState(0, 0);
           }
           this.scheduleStatusUpdate();
         },
@@ -113,7 +118,9 @@ export class OneCVacuumAccessory {
 
           this.platform.log.info(`Matter: Change suction mode to ${SUCTION_MODES[nextMode].label}`);
           await this.client.setProperty(18, 6, nextMode); // Cleaning Mode / suction level
-          this.scheduleStatusUpdate(1000);
+          const matter = this.platform.api.matter!;
+          await this.updateClusterState(matter.clusterNames.RvcCleanMode, { currentMode: nextMode }, true);
+          this.scheduleStatusUpdate(500);
         },
       },
     };
@@ -121,11 +128,17 @@ export class OneCVacuumAccessory {
     // Polling
     const interval = (this.platform.config.pollInterval || 30) * 1000;
     setInterval(() => this.updateStatus(), interval);
-    setTimeout(() => this.updateStatus(), 5000); // Initial update after 5s delay
+    setTimeout(() => this.updateStatus(), 1000); // Initial update after Matter registration settles
   }
 
-  private scheduleStatusUpdate(delay = 1500) {
+  private scheduleStatusUpdate(delay = 500) {
     setTimeout(() => this.updateStatus(true), delay);
+  }
+
+  private async setOptimisticRunState(operationalState: number, currentMode: number) {
+    const matter = this.platform.api.matter!;
+    await this.updateClusterState(matter.clusterNames.RvcOperationalState, { operationalState }, true);
+    await this.updateClusterState(matter.clusterNames.RvcRunMode, { currentMode }, true);
   }
 
   private async updateClusterState(clusterName: string, payload: Record<string, any>, force = false) {
