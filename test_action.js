@@ -1,27 +1,44 @@
-import miio from 'miio-api';
+import miio from 'miio';
 
 async function testAction() {
+  const [, , address, token, did] = process.argv;
+
+  if (!address || !token || !did) {
+    console.error('Usage: npm run check:local -- <ip> <token> <deviceId>');
+    process.exit(2);
+  }
+
   try {
-    console.log('Connecting to vacuum...');
+    console.log(`Connecting to vacuum at ${address}:54321...`);
     const device = await miio.device({
-      address: '10.11.3.248',
-      token: 'YOUR_32_CHARACTER_TOKEN',
+      address,
+      token,
     });
     
-    const did = 415069056;
-    console.log('Sending Start Sweep action...');
-    const result = await device.call('action', {
+    console.log('Reading status, battery, and charging state...');
+    const result = await device.call('get_properties', [{
       siid: 3,
-      aiid: 1,
       did: String(did),
-      in: []
-    }, { timeout: 10000 });
+      piid: 1,
+    }, {
+      siid: 3,
+      did: String(did),
+      piid: 2,
+    }, {
+      siid: 2,
+      did: String(did),
+      piid: 1,
+    }, {
+      siid: 2,
+      did: String(did),
+      piid: 2,
+    }], { retries: 5 });
     
-    console.log('Action result:', JSON.stringify(result, null, 2));
+    console.log('Property result:', JSON.stringify(result, null, 2));
     device.destroy();
     process.exit(0);
   } catch (e) {
-    console.error('Action failed:', e.message);
+    console.error('Local check failed:', e.message);
     process.exit(1);
   }
 }

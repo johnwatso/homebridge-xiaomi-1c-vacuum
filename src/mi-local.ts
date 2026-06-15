@@ -1,22 +1,28 @@
-import miio from 'miio-api';
+import miio from 'miio';
 
 export class XiaomiLocalClient {
   private device: any = null;
+  private readonly connectAttempts: number;
 
   constructor(
     private readonly log: any,
     private readonly config: any,
-  ) {}
+  ) {
+    this.connectAttempts = Number(this.config.connectAttempts || 5);
+  }
 
   async init() {
     try {
+      this.log.info(`Connecting to Xiaomi device at ${this.config.ip}:54321`);
       this.device = await miio.device({
         address: this.config.ip,
         token: this.config.token,
       });
       this.log.info('Xiaomi Local LAN connection initialized');
     } catch (e: any) {
-      this.log.error('Failed to connect to Xiaomi device locally:', e.message);
+      this.device = null;
+      this.log.error(`Failed to connect to Xiaomi device locally at ${this.config.ip}:54321: ${e.message}`);
+      this.log.error('Check that the vacuum is awake, on the same network/VLAN, reachable on UDP port 54321, and that the local token is correct.');
       throw e;
     }
   }
@@ -35,7 +41,7 @@ export class XiaomiLocalClient {
           piid: p.piid,
         }));
         
-        const results = await this.device.call('get_properties', miotProps, { timeout: 8000 });
+        const results = await this.device.call('get_properties', miotProps, { retries: this.connectAttempts });
         this.log.debug('Received local property result:', JSON.stringify(results));
         
         if (!Array.isArray(results)) {

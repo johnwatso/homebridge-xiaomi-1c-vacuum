@@ -18,12 +18,13 @@
     "url": "git+https://github.com/johnwatso/homebridge-1c-matter.git"
   },
   "engines": {
-    "node": "^18.15.0 || ^20.9.0 || ^22.11.0 || ^24.0.0",
+    "node": "^22 || ^24",
     "homebridge": "^2.0.0"
   },
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
+    "check:local": "node test_action.js",
     "watch": "tsc -w",
     "prepublishOnly": "npm run build"
   },
@@ -33,6 +34,6 @@
     "typescript": "^5.3.0"
   },
   "dependencies": {
-    "miio-api": "^0.4.1"
+    "miio": "^0.15.6"
   }
 }

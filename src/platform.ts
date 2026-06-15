@@ -23,17 +23,12 @@ export class OneCMatterPlatform implements DynamicPlatformPlugin {
   }
 
   async discoverDevices() {
-    if (!this.config.ip || !this.config.token) {
-      this.log.error('Missing Local LAN configuration (IP or Token). Please check your config.json');
+    if (!this.config.ip || !this.config.token || !this.config.deviceId) {
+      this.log.error('Missing Local LAN configuration (IP, Token, or Device ID). Please check your config.json');
       return;
     }
 
     this.client = new XiaomiLocalClient(this.log, this.config);
-    try {
-      await this.client.init();
-    } catch (e) {
-      return;
-    }
 
     const uuid = this.api.hap.uuid.generate(this.config.deviceId);
     
@@ -58,7 +53,7 @@ export class OneCMatterPlatform implements DynamicPlatformPlugin {
               { operationalStateId: 1 }, // Running
               { operationalStateId: 2 }, // Paused
               { operationalStateId: 3 }, // Error
-              { operationalStateId: 64 }, // SeekingCharger
+              { operationalStateId: 4 }, // SeekingCharger
             ],
           },
           rvcRunMode: {

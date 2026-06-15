@@ -28,6 +28,13 @@
         "type": "integer",
         "default": 30,
         "minimum": 10
+      },
+      "connectAttempts": {
+        "title": "Connection Attempts",
+        "type": "integer",
+        "default": 5,
+        "minimum": 1,
+        "description": "How many local UDP handshake attempts to make before giving up."
       }
     }
   }

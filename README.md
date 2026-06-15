@@ -21,12 +21,25 @@ Add the following to your Homebridge `config.json`:
   "name": "OneCMatter",
   "ip": "10.11.3.248",
   "token": "YOUR_32_CHARACTER_TOKEN",
-  "pollInterval": 30
+  "deviceId": "YOUR_DEVICE_ID",
+  "pollInterval": 30,
+  "connectAttempts": 5
 }
 ```
 
 ### How to get your Token
-You can use the **[Xiaomi-Cloud-Tokens-Extractor](https://github.com/PiotrMachowski/Xiaomi-Cloud-Tokens-Extractor)** to easily get the IP and Token for all your Xiaomi devices.
+You can use the **[Xiaomi-Cloud-Tokens-Extractor](https://github.com/PiotrMachowski/Xiaomi-Cloud-Tokens-Extractor)** to easily get the IP, Token, and Device ID for all your Xiaomi devices.
+
+## Network Notes
+This plugin talks directly to the vacuum over the local Xiaomi miIO protocol on UDP port `54321`.
+
+If Homebridge is on a different VLAN or subnet from the vacuum, basic ping may work while miIO still times out. In that case, add a tightly scoped network rule for Homebridge to reach the vacuum on UDP `54321`. Some Xiaomi vacuums only respond reliably when the traffic appears to come from their own subnet; on UniFi, this can be handled with a small masquerade/source NAT rule from the Homebridge host to the vacuum on UDP `54321`.
+
+You can test local connectivity outside Homebridge with:
+
+```bash
+npm run check:local -- <vacuum-ip> <token> <device-id>
+```
 
 ## Pairing
 Once Homebridge starts, check the logs for the **Matter QR Code**. Scan this code with your Home app to add the vacuum.
