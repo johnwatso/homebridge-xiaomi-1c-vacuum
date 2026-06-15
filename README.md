@@ -1,5 +1,12 @@
 # Homebridge 1C Matter (Local LAN)
 
+[![npm version](https://img.shields.io/npm/v/homebridge-1c-matter.svg)](https://www.npmjs.com/package/homebridge-1c-matter)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%5E22%20%7C%7C%20%5E24-339933.svg)](package.json)
+[![Homebridge](https://img.shields.io/badge/homebridge-2.x-purple.svg)](https://homebridge.io/)
+[![Matter](https://img.shields.io/badge/Matter-robot%20vacuum-0f7fff.svg)](https://csa-iot.org/all-solutions/matter/)
+[![Local LAN](https://img.shields.io/badge/control-local%20LAN-success.svg)](#network-notes)
+
 Matter-native Homebridge 2.0 plugin for Xiaomi Mi Robot Vacuum-Mop 1C using Local LAN control.
 
 ## Features
@@ -11,6 +18,7 @@ Matter-native Homebridge 2.0 plugin for Xiaomi Mi Robot Vacuum-Mop 1C using Loca
 - **Fault Labels:** Logs common vacuum fault codes with readable descriptions.
 - **Find Vacuum:** Apple Home identify requests and the local check command can trigger the vacuum's locate prompt.
 - **Consumable Status:** Logs main brush, side brush, and filter life when status changes.
+- **Consumable Resets:** Local helper can reset main brush, side brush, and filter counters after replacement.
 - **Power Status:** Reports battery percentage and charging/docked state.
 - **Apple Home Automations:** Works with Siri, scenes, and Apple Home automations through Matter.
 - **Local Connectivity Check:** Includes a command-line check to verify local IP, token, and device ID access before pairing.
@@ -49,10 +57,20 @@ You can test local connectivity outside Homebridge with:
 npm run check:local -- <vacuum-ip> <token> <device-id>
 ```
 
+Add `--raw` to print the raw MIoT response instead of the human-readable summary.
+
 To trigger the vacuum's locate prompt:
 
 ```bash
 npm run check:local -- <vacuum-ip> <token> <device-id> --find
+```
+
+After replacing a consumable, reset its counter with:
+
+```bash
+npm run check:local -- <vacuum-ip> <token> <device-id> --reset main-brush
+npm run check:local -- <vacuum-ip> <token> <device-id> --reset filter
+npm run check:local -- <vacuum-ip> <token> <device-id> --reset side-brush
 ```
 
 ## Pairing

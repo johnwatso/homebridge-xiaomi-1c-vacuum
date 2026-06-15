@@ -234,6 +234,10 @@ export class OneCVacuumAccessory {
   }
 
   private logConsumables(consumables: Array<{ label: string; time: any; life: any }>) {
+    if (this.platform.config.enableConsumableLogs === false) {
+      return;
+    }
+
     const summary = consumables
       .filter(item => item.life !== undefined || item.time !== undefined)
       .map(item => `${item.label}: ${item.life ?? '?'}% (${item.time ?? '?'}h left)`)
@@ -246,8 +250,9 @@ export class OneCVacuumAccessory {
     this.lastConsumableSummary = summary;
     this.platform.log.info(`Vacuum consumables: ${summary}`);
 
+    const lowThreshold = Number(this.platform.config.lowConsumableThreshold ?? 20);
     for (const item of consumables) {
-      if (typeof item.life === 'number' && item.life <= 20) {
+      if (typeof item.life === 'number' && item.life <= lowThreshold) {
         this.platform.log.warn(`${item.label} life is low: ${item.life}% remaining`);
       }
     }
