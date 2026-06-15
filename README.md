@@ -9,6 +9,8 @@ Matter-native Homebridge 2.0 plugin for Xiaomi Mi Robot Vacuum-Mop 1C using Loca
 - **Suction Modes:** Quiet, Default, Medium, and Strong cleaning modes.
 - **Status Updates:** Reports idle, cleaning, paused, error, and returning-to-dock states.
 - **Fault Labels:** Logs common vacuum fault codes with readable descriptions.
+- **Find Vacuum:** Apple Home identify requests and the local check command can trigger the vacuum's locate prompt.
+- **Consumable Status:** Logs main brush, side brush, and filter life when status changes.
 - **Power Status:** Reports battery percentage and charging/docked state.
 - **Apple Home Automations:** Works with Siri, scenes, and Apple Home automations through Matter.
 - **Local Connectivity Check:** Includes a command-line check to verify local IP, token, and device ID access before pairing.
@@ -45,6 +47,12 @@ You can test local connectivity outside Homebridge with:
 
 ```bash
 npm run check:local -- <vacuum-ip> <token> <device-id>
+```
+
+To trigger the vacuum's locate prompt:
+
+```bash
+npm run check:local -- <vacuum-ip> <token> <device-id> --find
 ```
 
 ## Pairing

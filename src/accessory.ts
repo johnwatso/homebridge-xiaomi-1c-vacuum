@@ -40,6 +40,12 @@ const FAULT_LABELS: Record<number, string> = {
   15: 'Water tank missing',
 };
 
+const CONSUMABLES = [
+  { key: 'mainBrush', label: 'Main brush', siid: 26, timePiid: 1, lifePiid: 2 },
+  { key: 'filter', label: 'Filter', siid: 27, timePiid: 2, lifePiid: 1 },
+  { key: 'sideBrush', label: 'Side brush', siid: 28, timePiid: 1, lifePiid: 2 },
+];
+
 function describeStatus(status: number | undefined) {
   return status === undefined ? 'Unknown' : DEVICE_STATUS_LABELS[status] || `Unknown status ${status}`;
 }
@@ -53,6 +59,7 @@ export class OneCVacuumAccessory {
   private consecutiveFailures = 0;
   private nextAllowedUpdate = 0;
   private readonly lastClusterState = new Map<string, string>();
+  private lastConsumableSummary = '';
 
   constructor(
     private readonly platform: OneCMatterPlatform,
@@ -63,6 +70,12 @@ export class OneCVacuumAccessory {
 
     // Register handlers
     this.accessory.handlers = {
+      identify: {
+        identify: async () => {
+          this.platform.log.info('Matter: Identify command');
+          await this.client.doAction(17, 1); // Locate vacuum / play prompt
+        },
+      },
       rvcOperationalState: {
         pause: async () => {
           this.platform.log.info('Matter: Pause command');
@@ -147,6 +160,10 @@ export class OneCVacuumAccessory {
         { siid: 2, piid: 1 }, // Battery Level
         { siid: 2, piid: 2 }, // Charging State
         { siid: 18, piid: 6 }, // Cleaning Mode / suction level
+        ...CONSUMABLES.flatMap(item => [
+          { siid: item.siid, piid: item.timePiid },
+          { siid: item.siid, piid: item.lifePiid },
+        ]),
       ]);
 
       if (!props || props.length === 0) return;
@@ -156,11 +173,17 @@ export class OneCVacuumAccessory {
       const battery = props.find((p: any) => p.siid === 2 && p.piid === 1)?.value;
       const charging = props.find((p: any) => p.siid === 2 && p.piid === 2)?.value;
       const cleaningMode = props.find((p: any) => p.siid === 18 && p.piid === 6)?.value;
+      const consumables = CONSUMABLES.map(item => ({
+        ...item,
+        time: props.find((p: any) => p.siid === item.siid && p.piid === item.timePiid)?.value,
+        life: props.find((p: any) => p.siid === item.siid && p.piid === item.lifePiid)?.value,
+      }));
 
       this.platform.log.debug(`Vacuum status: ${describeStatus(status)}, fault: ${describeFault(fault)}`);
       if (fault !== undefined && fault !== 0) {
         this.platform.log.warn(`Vacuum fault ${fault}: ${describeFault(fault)}`);
       }
+      this.logConsumables(consumables);
       this.consecutiveFailures = 0;
       this.nextAllowedUpdate = 0;
 
@@ -207,6 +230,26 @@ export class OneCVacuumAccessory {
       this.platform.log.warn(`Backing off vacuum polling for ${Math.round(backoff / 1000)} seconds`);
     } finally {
       this.isUpdating = false;
+    }
+  }
+
+  private logConsumables(consumables: Array<{ label: string; time: any; life: any }>) {
+    const summary = consumables
+      .filter(item => item.life !== undefined || item.time !== undefined)
+      .map(item => `${item.label}: ${item.life ?? '?'}% (${item.time ?? '?'}h left)`)
+      .join(', ');
+
+    if (!summary || summary === this.lastConsumableSummary) {
+      return;
+    }
+
+    this.lastConsumableSummary = summary;
+    this.platform.log.info(`Vacuum consumables: ${summary}`);
+
+    for (const item of consumables) {
+      if (typeof item.life === 'number' && item.life <= 20) {
+        this.platform.log.warn(`${item.label} life is low: ${item.life}% remaining`);
+      }
     }
   }
 }
