@@ -5,6 +5,12 @@
   "schema": {
     "type": "object",
     "properties": {
+      "name": {
+        "title": "Display Name",
+        "type": "string",
+        "default": "Xiaomi 1C Vacuum",
+        "description": "The name shown for the vacuum in Homebridge and Apple Home."
+      },
       "ip": {
         "title": "Device IP Address",
         "type": "string",
@@ -27,14 +33,17 @@
         "title": "Polling Interval (seconds)",
         "type": "integer",
         "default": 30,
-        "minimum": 10
+        "minimum": 10,
+        "maximum": 300,
+        "description": "How often to refresh vacuum status. Commands trigger an additional fast refresh."
       },
       "connectAttempts": {
         "title": "Connection Attempts",
         "type": "integer",
         "default": 5,
         "minimum": 1,
-        "description": "How many local UDP handshake attempts to make before giving up."
+        "maximum": 10,
+        "description": "How many local UDP retries to make before giving up on a command or status read."
       }
     }
   }

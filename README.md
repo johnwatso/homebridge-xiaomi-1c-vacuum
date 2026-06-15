@@ -5,7 +5,13 @@ Matter-native Homebridge 2.0 plugin for Xiaomi Mi Robot Vacuum-Mop 1C using Loca
 ## Features
 - **Native HomeKit Vacuum Support:** Appears as a native vacuum in the Home app (iOS 18+ / Homebridge 2.0+).
 - **Local Control:** Bypasses Xiaomi Cloud for instant response and better privacy.
-- **Real-time Status:** Battery level and cleaning status updates.
+- **Cleaning Controls:** Start cleaning, pause, resume, and return to dock.
+- **Suction Modes:** Quiet, Default, Medium, and Strong cleaning modes.
+- **Status Updates:** Reports idle, cleaning, paused, error, and returning-to-dock states.
+- **Fault Labels:** Logs common vacuum fault codes with readable descriptions.
+- **Power Status:** Reports battery percentage and charging/docked state.
+- **Apple Home Automations:** Works with Siri, scenes, and Apple Home automations through Matter.
+- **Local Connectivity Check:** Includes a command-line check to verify local IP, token, and device ID access before pairing.
 
 ## Installation
 1. Install Homebridge 2.0 or later.

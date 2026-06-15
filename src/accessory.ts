@@ -1,8 +1,59 @@
-import { CharacteristicValue } from 'homebridge';
 import { OneCMatterPlatform } from './platform.js';
 import { XiaomiLocalClient } from './mi-local.js';
 
+const SUCTION_MODES = [
+  { label: 'Quiet', mode: 0, modeTags: [{ value: 2 }, { value: 16385 }] },
+  { label: 'Default', mode: 1, modeTags: [{ value: 0 }, { value: 16385 }] },
+  { label: 'Medium', mode: 2, modeTags: [{ value: 16384 }, { value: 16385 }] },
+  { label: 'Strong', mode: 3, modeTags: [{ value: 7 }, { value: 16385 }] },
+];
+
+const DEVICE_STATUS_LABELS: Record<number, string> = {
+  1: 'Cleaning',
+  2: 'Idle',
+  3: 'Paused',
+  4: 'Error',
+  5: 'Returning to dock',
+  6: 'Charging',
+  7: 'Mopping',
+  12: 'Sweeping and mopping',
+  13: 'Charging complete',
+  14: 'Upgrading',
+};
+
+const FAULT_LABELS: Record<number, string> = {
+  0: 'No fault',
+  1: 'Left wheel error',
+  2: 'Right wheel error',
+  3: 'Cliff sensor error',
+  4: 'Low battery',
+  5: 'Main brush blocked',
+  6: 'Side brush error',
+  7: 'Fan error',
+  8: 'Dust compartment or water tank issue',
+  9: 'Charging error',
+  10: 'Water shortage',
+  11: 'Vacuum is lifted or off the ground',
+  12: 'Stuck or trapped',
+  13: 'Restricted area or virtual wall detected',
+  14: 'Dust compartment missing',
+  15: 'Water tank missing',
+};
+
+function describeStatus(status: number | undefined) {
+  return status === undefined ? 'Unknown' : DEVICE_STATUS_LABELS[status] || `Unknown status ${status}`;
+}
+
+function describeFault(fault: number | undefined) {
+  return fault === undefined ? 'Unknown fault' : FAULT_LABELS[fault] || `Unknown fault ${fault}`;
+}
+
 export class OneCVacuumAccessory {
+  private isUpdating = false;
+  private consecutiveFailures = 0;
+  private nextAllowedUpdate = 0;
+  private readonly lastClusterState = new Map<string, string>();
+
   constructor(
     private readonly platform: OneCMatterPlatform,
     private readonly accessory: any, // MatterAccessory
@@ -16,14 +67,17 @@ export class OneCVacuumAccessory {
         pause: async () => {
           this.platform.log.info('Matter: Pause command');
           await this.client.doAction(3, 2); // Stop Sweep
+          this.scheduleStatusUpdate();
         },
         resume: async () => {
           this.platform.log.info('Matter: Resume command');
           await this.client.doAction(3, 1); // Start Sweep
+          this.scheduleStatusUpdate();
         },
         goHome: async () => {
           this.platform.log.info('Matter: Go Home command');
           await this.client.doAction(2, 1); // Start Charge
+          this.scheduleStatusUpdate();
         },
       },
       rvcRunMode: {
@@ -34,6 +88,19 @@ export class OneCVacuumAccessory {
           } else {
             await this.client.doAction(3, 2); // Stop Sweep
           }
+          this.scheduleStatusUpdate();
+        },
+      },
+      rvcCleanMode: {
+        changeToMode: async (args: any) => {
+          const nextMode = Number(args.newMode);
+          if (!SUCTION_MODES.some(mode => mode.mode === nextMode)) {
+            throw new Error(`Unsupported suction mode: ${args.newMode}`);
+          }
+
+          this.platform.log.info(`Matter: Change suction mode to ${SUCTION_MODES[nextMode].label}`);
+          await this.client.setProperty(18, 6, nextMode); // Cleaning Mode / suction level
+          this.scheduleStatusUpdate(1000);
         },
       },
     };
@@ -44,13 +111,42 @@ export class OneCVacuumAccessory {
     setTimeout(() => this.updateStatus(), 5000); // Initial update after 5s delay
   }
 
-  async updateStatus() {
+  private scheduleStatusUpdate(delay = 1500) {
+    setTimeout(() => this.updateStatus(true), delay);
+  }
+
+  private async updateClusterState(clusterName: string, payload: Record<string, any>, force = false) {
+    const cacheKey = `${this.accessory.UUID}:${clusterName}`;
+    const serialized = JSON.stringify(payload);
+
+    if (!force && this.lastClusterState.get(cacheKey) === serialized) {
+      return;
+    }
+
+    const matter = this.platform.api.matter!;
+    await matter.updateAccessoryState(this.accessory.UUID, clusterName, payload);
+    this.lastClusterState.set(cacheKey, serialized);
+  }
+
+  async updateStatus(force = false) {
+    const now = Date.now();
+    if (this.isUpdating) {
+      this.platform.log.debug('Skipping status update because a previous update is still running');
+      return;
+    }
+    if (!force && now < this.nextAllowedUpdate) {
+      this.platform.log.debug('Skipping status update during temporary backoff');
+      return;
+    }
+
+    this.isUpdating = true;
     try {
       const props = await this.client.getProperties([
         { siid: 3, piid: 1 }, // Fault
         { siid: 3, piid: 2 }, // Status
         { siid: 2, piid: 1 }, // Battery Level
         { siid: 2, piid: 2 }, // Charging State
+        { siid: 18, piid: 6 }, // Cleaning Mode / suction level
       ]);
 
       if (!props || props.length === 0) return;
@@ -59,38 +155,58 @@ export class OneCVacuumAccessory {
       const status = props.find((p: any) => p.siid === 3 && p.piid === 2)?.value;
       const battery = props.find((p: any) => p.siid === 2 && p.piid === 1)?.value;
       const charging = props.find((p: any) => p.siid === 2 && p.piid === 2)?.value;
+      const cleaningMode = props.find((p: any) => p.siid === 18 && p.piid === 6)?.value;
 
-      const matter = this.platform.api.matter!;
+      this.platform.log.debug(`Vacuum status: ${describeStatus(status)}, fault: ${describeFault(fault)}`);
+      if (fault !== undefined && fault !== 0) {
+        this.platform.log.warn(`Vacuum fault ${fault}: ${describeFault(fault)}`);
+      }
+      this.consecutiveFailures = 0;
+      this.nextAllowedUpdate = 0;
 
       // Map Dreame 1C status to Matter RVC Operational State.
       // DeviceStatus: 1 Sweeping, 2 Idle, 3 Paused, 4 Error, 5 GoCharging, 6 Charging, 12 SweepingAndMopping, 13 ChargingComplete
-      // Matter OperationalState: 0: Stopped, 1: Running, 2: Paused, 3: Error, 4: SeekingCharger
+      // Matter OperationalState: 0: Stopped, 1: Running, 2: Paused, 3: Error, 64: SeekingCharger
       let opState = 0;
       if ([1, 7, 12].includes(status)) opState = 1;
       else if (status === 3) opState = 2;
       else if (status === 4 || (fault !== undefined && fault !== 0)) opState = 3;
-      else if (status === 5) opState = 4;
+      else if (status === 5) opState = 64;
 
-      await matter.updateAccessoryState(this.accessory.UUID, matter.clusterNames.RvcOperationalState, {
+      const matter = this.platform.api.matter!;
+      await this.updateClusterState(matter.clusterNames.RvcOperationalState, {
         operationalState: opState,
-      });
+      }, force);
 
       // Map to RvcRunMode
-      await matter.updateAccessoryState(this.accessory.UUID, matter.clusterNames.RvcRunMode, {
+      await this.updateClusterState(matter.clusterNames.RvcRunMode, {
         currentMode: [1, 7, 12].includes(status) ? 1 : 0,
-      });
+      }, force);
+
+      if (cleaningMode !== undefined) {
+        await this.updateClusterState(matter.clusterNames.RvcCleanMode, {
+          currentMode: cleaningMode,
+        }, force);
+      }
 
       // Battery (PowerSource cluster)
       if (battery !== undefined) {
         // Matter batPercentRemaining is 0-200 (0.5% steps)
-        await matter.updateAccessoryState(this.accessory.UUID, matter.clusterNames.PowerSource, {
+        await this.updateClusterState(matter.clusterNames.PowerSource, {
           batPercentRemaining: battery * 2,
           batChargeState: [1, 4, 5].includes(charging) ? 1 : 0, // Dreame reports 4 as a charging state while docked.
-        });
+        }, force);
       }
 
     } catch (e: any) {
+      this.consecutiveFailures++;
+      const baseInterval = (this.platform.config.pollInterval || 30) * 1000;
+      const backoff = Math.min(baseInterval * 2 ** this.consecutiveFailures, 5 * 60 * 1000);
+      this.nextAllowedUpdate = Date.now() + backoff;
       this.platform.log.error('Error updating status:', e.message);
+      this.platform.log.warn(`Backing off vacuum polling for ${Math.round(backoff / 1000)} seconds`);
+    } finally {
+      this.isUpdating = false;
     }
   }
 }

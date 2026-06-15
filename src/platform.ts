@@ -36,10 +36,11 @@ export class OneCMatterPlatform implements DynamicPlatformPlugin {
     if (this.api.isMatterEnabled()) {
       this.log.info('Matter is enabled. Registering as Matter accessory.');
       const matter = this.api.matter!;
+      const displayName = this.config.name || 'Xiaomi 1C Vacuum';
       
       const accessory: any = {
         UUID: uuid,
-        displayName: 'Xiaomi 1C Vacuum',
+        displayName,
         deviceType: matter.deviceTypes.RoboticVacuumCleaner,
         manufacturer: 'Xiaomi',
         model: '1C Vacuum (MC1808)',
@@ -53,7 +54,7 @@ export class OneCMatterPlatform implements DynamicPlatformPlugin {
               { operationalStateId: 1 }, // Running
               { operationalStateId: 2 }, // Paused
               { operationalStateId: 3 }, // Error
-              { operationalStateId: 4 }, // SeekingCharger
+              { operationalStateId: 64 }, // SeekingCharger
             ],
           },
           rvcRunMode: {
@@ -61,6 +62,15 @@ export class OneCMatterPlatform implements DynamicPlatformPlugin {
             supportedModes: [
               { label: 'Idle', mode: 0, modeTags: [{ value: 16384 }] }, // RvcRunMode.ModeTag.Idle
               { label: 'Cleaning', mode: 1, modeTags: [{ value: 16385 }] }, // RvcRunMode.ModeTag.Cleaning
+            ],
+          },
+          rvcCleanMode: {
+            currentMode: 1,
+            supportedModes: [
+              { label: 'Quiet', mode: 0, modeTags: [{ value: 2 }, { value: 16385 }] },
+              { label: 'Default', mode: 1, modeTags: [{ value: 0 }, { value: 16385 }] },
+              { label: 'Medium', mode: 2, modeTags: [{ value: 16384 }, { value: 16385 }] },
+              { label: 'Strong', mode: 3, modeTags: [{ value: 7 }, { value: 16385 }] },
             ],
           },
           powerSource: {

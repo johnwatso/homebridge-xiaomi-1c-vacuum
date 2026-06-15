@@ -32,6 +32,10 @@ async function testAction() {
       siid: 2,
       did: String(did),
       piid: 2,
+    }, {
+      siid: 18,
+      did: String(did),
+      piid: 6,
     }], { retries: 5 });
     
     console.log('Property result:', JSON.stringify(result, null, 2));
