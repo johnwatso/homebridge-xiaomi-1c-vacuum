@@ -1,4 +1,4 @@
-<h1 align="center">Homebridge 1C Matter (Local LAN)</h1>
+<h1 align="center">Homebridge Xiaomi 1C Vacuum</h1>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/homebridge-1c-matter"><img src="https://img.shields.io/npm/v/homebridge-1c-matter.svg" alt="npm version"></a>
@@ -14,6 +14,8 @@
 </p>
 
 Matter-native Homebridge 2.0 plugin for Xiaomi Mi Robot Vacuum-Mop 1C using Local LAN control.
+
+Published on npm as [`homebridge-1c-matter`](https://www.npmjs.com/package/homebridge-1c-matter).
 
 ## Features
 - **Native HomeKit Vacuum Support:** Appears as a native vacuum in the Home app (iOS 18+ / Homebridge 2.0+).

@@ -15,7 +15,11 @@
   "author": "john",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/johnwatso/homebridge-1c-matter.git"
+    "url": "git+https://github.com/johnwatso/homebridge-xiaomi-1c-vacuum.git"
+  },
+  "homepage": "https://github.com/johnwatso/homebridge-xiaomi-1c-vacuum#readme",
+  "bugs": {
+    "url": "https://github.com/johnwatso/homebridge-xiaomi-1c-vacuum/issues"
   },
   "engines": {
     "node": "^22 || ^24",
