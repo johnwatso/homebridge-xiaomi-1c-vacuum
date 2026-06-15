@@ -7,6 +7,10 @@
 [![Matter](https://img.shields.io/badge/Matter-robot%20vacuum-0f7fff.svg)](https://csa-iot.org/all-solutions/matter/)
 [![Local LAN](https://img.shields.io/badge/control-local%20LAN-success.svg)](#network-notes)
 
+<p align="center">
+  <img src="assets/homebridge-1c-matter.png" alt="Homebridge 1C Matter" width="320">
+</p>
+
 Matter-native Homebridge 2.0 plugin for Xiaomi Mi Robot Vacuum-Mop 1C using Local LAN control.
 
 ## Features
@@ -24,6 +28,8 @@ Matter-native Homebridge 2.0 plugin for Xiaomi Mi Robot Vacuum-Mop 1C using Loca
 - **Local Connectivity Check:** Includes a command-line check to verify local IP, token, and device ID access before pairing.
 
 ## Installation
+Install from npm: [homebridge-1c-matter](https://www.npmjs.com/package/homebridge-1c-matter)
+
 1. Install Homebridge 2.0 or later.
 2. Search for `homebridge-1c-matter` and install.
 3. Obtain your vacuum's **IP Address** and **32-character Token**.
