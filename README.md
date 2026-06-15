@@ -1,11 +1,13 @@
-# Homebridge 1C Matter (Local LAN)
+<h1 align="center">Homebridge 1C Matter (Local LAN)</h1>
 
-[![npm version](https://img.shields.io/npm/v/homebridge-1c-matter.svg)](https://www.npmjs.com/package/homebridge-1c-matter)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%5E22%20%7C%7C%20%5E24-339933.svg)](package.json)
-[![Homebridge](https://img.shields.io/badge/homebridge-2.x-purple.svg)](https://homebridge.io/)
-[![Matter](https://img.shields.io/badge/Matter-robot%20vacuum-0f7fff.svg)](https://csa-iot.org/all-solutions/matter/)
-[![Local LAN](https://img.shields.io/badge/control-local%20LAN-success.svg)](#network-notes)
+<p align="center">
+  <a href="https://www.npmjs.com/package/homebridge-1c-matter"><img src="https://img.shields.io/npm/v/homebridge-1c-matter.svg" alt="npm version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/node-%5E22%20%7C%7C%20%5E24-339933.svg" alt="Node.js"></a>
+  <a href="https://homebridge.io/"><img src="https://img.shields.io/badge/homebridge-2.x-purple.svg" alt="Homebridge"></a>
+  <a href="https://csa-iot.org/all-solutions/matter/"><img src="https://img.shields.io/badge/Matter-robot%20vacuum-0f7fff.svg" alt="Matter"></a>
+  <a href="#network-notes"><img src="https://img.shields.io/badge/control-local%20LAN-success.svg" alt="Local LAN"></a>
+</p>
 
 <p align="center">
   <img src="assets/homebridge-1c-matter.png" alt="Homebridge 1C Matter" width="320">
