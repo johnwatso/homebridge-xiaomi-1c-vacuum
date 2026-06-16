@@ -26,6 +26,12 @@
     "homebridge": "^2.0.0"
   },
   "main": "dist/index.js",
+  "files": [
+    "dist",
+    "config.schema.json",
+    "README.md",
+    "assets"
+  ],
   "scripts": {
     "build": "tsc",
     "check:local": "node test_action.js",

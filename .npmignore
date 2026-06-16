@@ -1,11 +1,8 @@
-# Exclude source files from NPM package
+# Source and dev files excluded from the NPM package.
+# Note: the "files" whitelist in package.json is authoritative for what ships.
 src/
 tsconfig.json
 .gitignore
+test_action.js
+*.tsbuildinfo
 npm-debug.log*
-
-# Include build artifacts
-dist/
-package.json
-README.md
-config.schema.json
