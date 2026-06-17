@@ -80,6 +80,27 @@ export class OneCMatterPlatform implements DynamicPlatformPlugin {
         },
       };
 
+      // Experimental, opt-in: expose configured rooms as Matter service areas.
+      const rooms = Array.isArray(this.config.rooms) ? this.config.rooms : [];
+      if (this.config.enableRoomCleaning === true && rooms.length > 0) {
+        accessory.clusters.serviceArea = {
+          supportedAreas: rooms.map((room: any) => ({
+            areaId: Number(room.id),
+            mapId: null,
+            areaInfo: {
+              locationInfo: {
+                locationName: String(room.name),
+                floorNumber: null,
+                areaType: null,
+              },
+              landmarkInfo: null,
+            },
+          })),
+          selectedAreas: [],
+        };
+        this.log.info(`Experimental room cleaning enabled with ${rooms.length} room(s).`);
+      }
+
       new OneCVacuumAccessory(this, accessory, this.client);
       await matter.registerPlatformAccessories('homebridge-1c-matter', 'OneCMatter', [accessory]);
     } else {

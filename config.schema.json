@@ -58,6 +58,53 @@
         "minimum": 0,
         "maximum": 100,
         "description": "Warn when filter or brush life is at or below this percentage."
+      },
+      "enableRoomCleaning": {
+        "title": "Enable Room Cleaning (Experimental)",
+        "type": "boolean",
+        "default": false,
+        "description": "EXPERIMENTAL: expose the rooms configured below as Matter service areas so a controller can start a room-by-room clean. Requires the vacuum to have a saved map with segmented rooms; on firmware that does not persist maps this may not work. Leave off to keep the plugin's default behaviour unchanged."
+      },
+      "rooms": {
+        "title": "Rooms",
+        "type": "array",
+        "description": "Segment/room IDs from your vacuum's saved map, paired with friendly names. Only used when Room Cleaning is enabled.",
+        "condition": { "functionBody": "return model.enableRoomCleaning === true;" },
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "title": "Room ID",
+              "type": "integer",
+              "required": true,
+              "description": "Numeric segment/room ID from the vacuum map (discoverable via the Mi Home app or a one-time cloud map dump)."
+            },
+            "name": {
+              "title": "Name",
+              "type": "string",
+              "required": true,
+              "description": "Friendly name shown in your controller (e.g. Kitchen)."
+            }
+          }
+        }
+      },
+      "roomCleanRepeats": {
+        "title": "Room Clean Repeats",
+        "type": "integer",
+        "default": 1,
+        "minimum": 1,
+        "maximum": 3,
+        "condition": { "functionBody": "return model.enableRoomCleaning === true;" },
+        "description": "How many times to clean each selected room per run."
+      },
+      "roomCleanSuction": {
+        "title": "Room Clean Suction Level",
+        "type": "integer",
+        "default": 2,
+        "minimum": 0,
+        "maximum": 3,
+        "condition": { "functionBody": "return model.enableRoomCleaning === true;" },
+        "description": "Suction level used during room cleaning (0 Quiet, 1 Default, 2 Medium, 3 Strong)."
       }
     }
   }

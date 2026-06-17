@@ -40,6 +40,15 @@ const FAULT_LABELS: Record<number, string> = {
   15: 'Water tank missing',
 };
 
+// Segment ("room") cleaning, exposed via the Matter ServiceArea cluster.
+// dreame.vacuum.mc1808: action siid 18 / aiid 1 (start-clean), with work-mode
+// piid 1 = 18 (room mode) and clean-info piid 21 = {"selects":[[id,repeats,suction,3,1]]}.
+const CLEAN_SIID = 18;
+const CLEAN_START_AIID = 1;
+const WORK_MODE_PIID = 1;
+const CLEAN_INFO_PIID = 21;
+const WORK_MODE_ROOM = 18;
+
 const CONSUMABLES = [
   { key: 'mainBrush', label: 'Main brush', siid: 26, timePiid: 1, lifePiid: 2 },
   { key: 'filter', label: 'Filter', siid: 27, timePiid: 2, lifePiid: 1 },
@@ -125,6 +134,17 @@ export class OneCVacuumAccessory {
       },
     };
 
+    // Experimental, opt-in: room-by-room cleaning via the ServiceArea cluster.
+    const rooms = Array.isArray(this.platform.config.rooms) ? this.platform.config.rooms : [];
+    if (this.platform.config.enableRoomCleaning === true && rooms.length > 0) {
+      this.accessory.handlers.serviceArea = {
+        selectAreas: async (args: any) => {
+          const areaIds: number[] = Array.isArray(args?.newAreas) ? args.newAreas : [];
+          await this.startRoomClean(areaIds);
+        },
+      };
+    }
+
     // Polling
     const interval = (this.platform.config.pollInterval || 30) * 1000;
     setInterval(() => this.updateStatus(), interval);
@@ -133,6 +153,27 @@ export class OneCVacuumAccessory {
 
   private scheduleStatusUpdate(delay = 500) {
     setTimeout(() => this.updateStatus(true), delay);
+  }
+
+  private async startRoomClean(areaIds: number[]) {
+    if (!areaIds.length) {
+      this.platform.log.warn('Room clean requested with no areas selected; ignoring.');
+      return;
+    }
+
+    const repeats = Number(this.platform.config.roomCleanRepeats ?? 1);
+    const suction = Number(this.platform.config.roomCleanSuction ?? 2);
+    // mc1808 selects tuple: [roomId, repeats, suction, 3, 1]
+    const selects = areaIds.map(id => [Number(id), repeats, suction, 3, 1]);
+    const cleanInfo = JSON.stringify({ selects });
+
+    this.platform.log.info(`Matter: Start room clean for area(s) ${areaIds.join(', ')} -> ${cleanInfo}`);
+    await this.client.doAction(CLEAN_SIID, CLEAN_START_AIID, [
+      { piid: WORK_MODE_PIID, value: WORK_MODE_ROOM },
+      { piid: CLEAN_INFO_PIID, value: cleanInfo },
+    ]);
+    await this.setOptimisticRunState(1, 1);
+    this.scheduleStatusUpdate();
   }
 
   private async setOptimisticRunState(operationalState: number, currentMode: number) {
