@@ -269,9 +269,18 @@ export class OneCVacuumAccessory {
       // Battery (PowerSource cluster)
       if (battery !== undefined) {
         // Matter batPercentRemaining is 0-200 (0.5% steps)
+        let chargeState = 0; // Unknown
+        if ([1, 5].includes(charging)) {
+          chargeState = 1; // IsCharging
+        } else if (charging === 4) {
+          chargeState = battery === 100 ? 2 : 1; // IsAtFullCharge or IsCharging
+        } else if (charging === 2) {
+          chargeState = 3; // IsNotCharging
+        }
+
         await this.updateClusterState(matter.clusterNames.PowerSource, {
           batPercentRemaining: battery * 2,
-          batChargeState: [1, 4, 5].includes(charging) ? 1 : 0, // Dreame reports 4 as a charging state while docked.
+          batChargeState: chargeState,
         }, force);
       }
 

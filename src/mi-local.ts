@@ -70,11 +70,16 @@ export class XiaomiLocalClient {
           throw new Error('Unexpected response format from get_properties');
         }
 
-        return results.map((res: any, i: number) => ({
-          siid: props[i].siid,
-          piid: props[i].piid,
-          value: res.value !== undefined ? res.value : res,
-        }));
+        return results.map((res: any, i: number) => {
+          const prop = props[i];
+          const siid = res?.siid !== undefined ? res.siid : prop?.siid;
+          const piid = res?.piid !== undefined ? res.piid : prop?.piid;
+          return {
+            siid,
+            piid,
+            value: res?.value !== undefined ? res.value : res,
+          };
+        }).filter(item => item.siid !== undefined && item.piid !== undefined);
       } catch (e: any) {
         attempt++;
         this.log.warn(`Failed to get local properties (attempt ${attempt}/${maxRetries}):`, e.message);
@@ -96,7 +101,7 @@ export class XiaomiLocalClient {
         aiid,
         did: String(this.config.deviceId),
         in: params,
-      });
+      }, { retries: this.connectAttempts });
       this.assertMiotSuccess(result, `Action siid ${siid} aiid ${aiid}`);
       
       this.log.info(`Local Action siid ${siid} aiid ${aiid} successful`);
@@ -124,6 +129,18 @@ export class XiaomiLocalClient {
       return result;
     } catch (e: any) {
       this.log.error('Failed to set local property:', e.message);
+      await this.resetDevice();
+      throw e;
+    }
+  }
+
+  async getDeviceInfo() {
+    try {
+      if (!this.device) await this.init();
+      const result = await this.device.call('miIO.info', [], { retries: this.connectAttempts });
+      return result;
+    } catch (e: any) {
+      this.log.error('Failed to fetch local device info:', e.message);
       await this.resetDevice();
       throw e;
     }

@@ -28,13 +28,51 @@ export class OneCMatterPlatform implements DynamicPlatformPlugin {
       return;
     }
 
+    const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+    const tokenRegex = /^[a-fA-F0-9]{32}$/;
+    const deviceIdRegex = /^\d+$/;
+
+    if (!ipRegex.test(this.config.ip)) {
+      this.log.error(`Invalid IP address format: "${this.config.ip}". Please check your config.json`);
+      return;
+    }
+
+    if (!tokenRegex.test(this.config.token)) {
+      this.log.error(`Invalid Token format: "${this.config.token}". The local token must be exactly 32 hexadecimal characters.`);
+      return;
+    }
+
+    if (!deviceIdRegex.test(String(this.config.deviceId))) {
+      this.log.error(`Invalid Device ID (DID) format: "${this.config.deviceId}". The device ID must be a numeric value.`);
+      return;
+    }
+
     this.client = new XiaomiLocalClient(this.log, this.config);
 
-    const uuid = this.api.hap.uuid.generate(this.config.deviceId);
+    const uuid = this.api.hap.uuid.generate(String(this.config.deviceId));
     
     // Check if we should use Matter
     if (this.api.isMatterEnabled()) {
       this.log.info('Matter is enabled. Registering as Matter accessory.');
+
+      // Unregister any cached legacy HAP accessories to avoid duplicates/stale accessories in Homebridge
+      if (this.accessories.length > 0) {
+        this.log.info(`Removing ${this.accessories.length} cached legacy HAP accessories.`);
+        this.api.unregisterPlatformAccessories('homebridge-1c-matter', 'OneCMatter', this.accessories);
+        this.accessories.length = 0;
+      }
+
+      let firmwareRevision = '1.0.0';
+      try {
+        const info = await this.client.getDeviceInfo();
+        if (info && info.fw_ver) {
+          firmwareRevision = info.fw_ver;
+          this.log.info(`Discovered vacuum firmware version: ${firmwareRevision}`);
+        }
+      } catch (e: any) {
+        this.log.warn(`Could not fetch vacuum firmware version dynamically at startup (${e.message}). Using default "1.0.0".`);
+      }
+
       const matter = this.api.matter!;
       const displayName = this.config.name || 'Xiaomi 1C Vacuum';
       
@@ -44,7 +82,8 @@ export class OneCMatterPlatform implements DynamicPlatformPlugin {
         deviceType: matter.deviceTypes.RoboticVacuumCleaner,
         manufacturer: 'Xiaomi',
         model: '1C Vacuum (MC1808)',
-        serialNumber: this.config.deviceId, 
+        serialNumber: String(this.config.deviceId),
+        firmwareRevision,
         context: { device: { ip: this.config.ip, did: this.config.deviceId } },
         clusters: {
           rvcOperationalState: {
