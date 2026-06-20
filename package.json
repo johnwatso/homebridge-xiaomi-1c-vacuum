@@ -29,6 +29,7 @@
   "files": [
     "dist",
     "config.schema.json",
+    "CHANGELOG.md",
     "README.md",
     "assets"
   ],

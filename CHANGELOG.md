@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-06-20
+
+### Added
+- **Configurable Local Request Timeout:** Added a `requestTimeout` setting, defaulting to `15000` milliseconds, so local Xiaomi/MiIO requests cannot wait indefinitely on a stale UDP connection.
+
+### Changed
+- **Local Request Guarding:** Wrapped local property reads, actions, property writes, and startup device-info reads in a shared timeout guard. When a request times out, the plugin now resets the stale local connection and allows the normal retry/recovery path to continue.
+- **Diagnostic Helper Reliability:** Added the same timeout behavior to `npm run check:local` so local checks, locate commands, and consumable reset commands fail with a clear timeout instead of hanging.
+
+### Fixed
+- **Stuck Updating State:** Fixed an issue where status polling could remain stuck in an in-progress update if the underlying local Xiaomi request never resolved. This could make the vacuum appear frozen in Apple Home or Homebridge until another command, such as Identify/Play Sound, caused fresh local traffic and shook the connection loose.
+
 ## [1.1.1] - 2026-06-19
 
 ### Fixed
