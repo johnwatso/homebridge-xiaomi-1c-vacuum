@@ -7,6 +7,7 @@
   <a href="https://homebridge.io/"><img src="https://img.shields.io/badge/homebridge-2.x-purple.svg" alt="Homebridge"></a>
   <a href="https://csa-iot.org/all-solutions/matter/"><img src="https://img.shields.io/badge/Matter-robot%20vacuum-0f7fff.svg" alt="Matter"></a>
   <a href="#network-notes"><img src="https://img.shields.io/badge/control-local%20LAN-success.svg" alt="Local LAN"></a>
+  <a href="https://github.com/johnwatso/homebridge-xiaomi-1c-vacuum/issues"><img src="https://img.shields.io/github/issues/johnwatso/homebridge-xiaomi-1c-vacuum.svg" alt="GitHub issues"></a>
 </p>
 
 <p align="center">
@@ -113,6 +114,15 @@ npm run check:local -- <vacuum-ip> <token> <device-id> --reset side-brush
 
 ## Pairing
 Once Homebridge starts, check the logs for the **Matter QR Code**. Scan this code with your Home app to add the vacuum.
+
+## Support
+If you run into setup problems, local miIO timeouts, Homebridge/Matter pairing issues, or model-specific quirks, please open a [GitHub issue](https://github.com/johnwatso/homebridge-xiaomi-1c-vacuum/issues).
+
+When reporting an issue, include your vacuum model, Homebridge version, Node.js version, network layout, and the output of:
+
+```bash
+npm run check:local -- <vacuum-ip> <token> <device-id> --raw
+```
 
 ## License
 MIT
