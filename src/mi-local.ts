@@ -3,12 +3,15 @@ import miio from 'miio';
 export class XiaomiLocalClient {
   private device: any = null;
   private readonly connectAttempts: number;
+  private readonly requestTimeoutMs: number;
 
   constructor(
     private readonly log: any,
     private readonly config: any,
   ) {
     this.connectAttempts = Number(this.config.connectAttempts || 5);
+    const requestTimeout = Number(this.config.requestTimeout);
+    this.requestTimeoutMs = Number.isFinite(requestTimeout) && requestTimeout > 0 ? requestTimeout : 15000;
   }
 
   private async resetDevice() {
@@ -29,6 +32,25 @@ export class XiaomiLocalClient {
 
     if (failed) {
       throw new Error(`${label} failed with MIoT code ${failed.code}`);
+    }
+  }
+
+  private async callDevice(method: string, params: any, label: string) {
+    if (!this.device) await this.init();
+
+    let timeout: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        this.device.call(method, params, { retries: this.connectAttempts }),
+        new Promise((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error(`${label} timed out after ${this.requestTimeoutMs}ms`)),
+            this.requestTimeoutMs,
+          );
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
   }
 
@@ -55,15 +77,13 @@ export class XiaomiLocalClient {
 
     while (attempt < maxRetries) {
       try {
-        if (!this.device) await this.init();
-
         const miotProps = props.map(p => ({
           did: String(this.config.deviceId),
           siid: p.siid,
           piid: p.piid,
         }));
         
-        const results = await this.device.call('get_properties', miotProps, { retries: this.connectAttempts });
+        const results = await this.callDevice('get_properties', miotProps, 'get_properties');
         this.log.debug('Received local property result:', JSON.stringify(results));
         
         if (!Array.isArray(results)) {
@@ -94,14 +114,12 @@ export class XiaomiLocalClient {
 
   async doAction(siid: number, aiid: number, params: any[] = []) {
     try {
-      if (!this.device) await this.init();
-
-      const result = await this.device.call('action', {
+      const result = await this.callDevice('action', {
         siid,
         aiid,
         did: String(this.config.deviceId),
         in: params,
-      }, { retries: this.connectAttempts });
+      }, `Action siid ${siid} aiid ${aiid}`);
       this.assertMiotSuccess(result, `Action siid ${siid} aiid ${aiid}`);
       
       this.log.info(`Local Action siid ${siid} aiid ${aiid} successful`);
@@ -115,14 +133,12 @@ export class XiaomiLocalClient {
 
   async setProperty(siid: number, piid: number, value: any) {
     try {
-      if (!this.device) await this.init();
-
-      const result = await this.device.call('set_properties', [{
+      const result = await this.callDevice('set_properties', [{
         did: String(this.config.deviceId),
         siid,
         piid,
         value,
-      }], { retries: this.connectAttempts });
+      }], `Property siid ${siid} piid ${piid}`);
       this.assertMiotSuccess(result, `Property siid ${siid} piid ${piid}`);
 
       this.log.info(`Local Property siid ${siid} piid ${piid} set to ${value}`);
@@ -136,8 +152,7 @@ export class XiaomiLocalClient {
 
   async getDeviceInfo() {
     try {
-      if (!this.device) await this.init();
-      const result = await this.device.call('miIO.info', [], { retries: this.connectAttempts });
+      const result = await this.callDevice('miIO.info', [], 'miIO.info');
       return result;
     } catch (e: any) {
       this.log.error('Failed to fetch local device info:', e.message);

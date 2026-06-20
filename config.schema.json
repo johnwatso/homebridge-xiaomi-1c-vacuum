@@ -45,6 +45,14 @@
         "maximum": 10,
         "description": "How many local UDP retries to make before giving up on a command or status read."
       },
+      "requestTimeout": {
+        "title": "Local Request Timeout (milliseconds)",
+        "type": "integer",
+        "default": 15000,
+        "minimum": 3000,
+        "maximum": 60000,
+        "description": "Maximum time to wait for a local vacuum request before resetting the connection and retrying."
+      },
       "enableConsumableLogs": {
         "title": "Log Consumable Status",
         "type": "boolean",

@@ -66,6 +66,20 @@ const RESET_ACTIONS = {
   'side-brush': { label: 'Side brush', siid: 28, aiid: 1 },
 };
 
+async function callWithTimeout(promise, label, timeoutMs = 15000) {
+  let timeout;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 function usage() {
   console.error('Usage: npm run check:local -- <ip> <token> <deviceId> [--find|--raw|--reset <main-brush|filter|side-brush>]');
 }
@@ -104,12 +118,12 @@ function printHumanSummary(results) {
 }
 
 async function callAction(device, did, action) {
-  const result = await device.call('action', {
+  const result = await callWithTimeout(device.call('action', {
     siid: action.siid,
     aiid: action.aiid,
     did: String(did),
     in: [],
-  }, { retries: 5 });
+  }, { retries: 5 }), action.label);
 
   if (result?.code !== undefined && result.code !== 0) {
     throw new Error(`${action.label} action failed with MIoT code ${result.code}`);
@@ -161,7 +175,10 @@ async function testAction() {
       siid: prop.siid,
       piid: prop.piid,
     }));
-    const result = await device.call('get_properties', props, { retries: 5 });
+    const result = await callWithTimeout(
+      device.call('get_properties', props, { retries: 5 }),
+      'get_properties',
+    );
 
     if (command === '--raw') {
       console.log('Property result:', JSON.stringify(result, null, 2));
