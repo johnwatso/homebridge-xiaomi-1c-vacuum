@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-06-22
+
+### Added
+- **Matter State Update Timeout:** Added a configurable `matterUpdateTimeout` setting, defaulting to `10000` milliseconds, so Homebridge/Matter state writes cannot leave polling permanently marked as in progress if a controller update stalls.
+- **Status Update Watchdog:** Added a configurable `statusUpdateWatchdog` setting, defaulting to `90000` milliseconds, so a later status poll can recover if a previous refresh runs longer than expected.
+
+### Changed
+- **Identify Recovery:** The Identify/Play Sound command now schedules a fast status refresh after the locate command succeeds, making the recovery path explicit instead of waiting for the next normal polling interval.
+
+### Fixed
+- **Matter Update Hangs:** Reduced another way the accessory could appear stuck updating by timing out Homebridge/Matter state writes and allowing the watchdog to clear stale in-progress status refreshes.
+
 ## [1.1.2] - 2026-06-20
 
 ### Added

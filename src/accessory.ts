@@ -48,6 +48,8 @@ const CLEAN_START_AIID = 1;
 const WORK_MODE_PIID = 1;
 const CLEAN_INFO_PIID = 21;
 const WORK_MODE_ROOM = 18;
+const DEFAULT_MATTER_UPDATE_TIMEOUT_MS = 10000;
+const DEFAULT_STATUS_UPDATE_WATCHDOG_MS = 90000;
 
 const CONSUMABLES = [
   { key: 'mainBrush', label: 'Main brush', siid: 26, timePiid: 1, lifePiid: 2 },
@@ -65,10 +67,14 @@ function describeFault(fault: number | undefined) {
 
 export class OneCVacuumAccessory {
   private isUpdating = false;
+  private updateStartedAt = 0;
+  private updateToken = 0;
   private consecutiveFailures = 0;
   private nextAllowedUpdate = 0;
   private readonly lastClusterState = new Map<string, string>();
   private lastConsumableSummary = '';
+  private readonly matterUpdateTimeoutMs: number;
+  private readonly statusUpdateWatchdogMs: number;
 
   constructor(
     private readonly platform: OneCMatterPlatform,
@@ -76,6 +82,14 @@ export class OneCVacuumAccessory {
     private readonly client: XiaomiLocalClient,
   ) {
     const matter = this.platform.api.matter!;
+    const matterUpdateTimeout = Number(this.platform.config.matterUpdateTimeout);
+    const statusUpdateWatchdog = Number(this.platform.config.statusUpdateWatchdog);
+    this.matterUpdateTimeoutMs = Number.isFinite(matterUpdateTimeout) && matterUpdateTimeout > 0
+      ? matterUpdateTimeout
+      : DEFAULT_MATTER_UPDATE_TIMEOUT_MS;
+    this.statusUpdateWatchdogMs = Number.isFinite(statusUpdateWatchdog) && statusUpdateWatchdog > 0
+      ? statusUpdateWatchdog
+      : DEFAULT_STATUS_UPDATE_WATCHDOG_MS;
 
     // Register handlers
     this.accessory.handlers = {
@@ -83,6 +97,7 @@ export class OneCVacuumAccessory {
         identify: async () => {
           this.platform.log.info('Matter: Identify command');
           await this.client.doAction(17, 1); // Locate vacuum / play prompt
+          this.scheduleStatusUpdate();
         },
       },
       rvcOperationalState: {
@@ -191,15 +206,43 @@ export class OneCVacuumAccessory {
     }
 
     const matter = this.platform.api.matter!;
-    await matter.updateAccessoryState(this.accessory.UUID, clusterName, payload);
+    await this.withTimeout(
+      matter.updateAccessoryState(this.accessory.UUID, clusterName, payload),
+      this.matterUpdateTimeoutMs,
+      `Matter state update for ${clusterName}`,
+    );
     this.lastClusterState.set(cacheKey, serialized);
+  }
+
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+    let timeout: NodeJS.Timeout | undefined;
+
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
+            timeoutMs,
+          );
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
   }
 
   async updateStatus(force = false) {
     const now = Date.now();
     if (this.isUpdating) {
-      this.platform.log.debug('Skipping status update because a previous update is still running');
-      return;
+      const updateAge = now - this.updateStartedAt;
+      if (updateAge > this.statusUpdateWatchdogMs) {
+        this.platform.log.warn(`Previous status update has been running for ${Math.round(updateAge / 1000)} seconds; allowing a fresh poll.`);
+        this.isUpdating = false;
+      } else {
+        this.platform.log.debug('Skipping status update because a previous update is still running');
+        return;
+      }
     }
     if (!force && now < this.nextAllowedUpdate) {
       this.platform.log.debug('Skipping status update during temporary backoff');
@@ -207,6 +250,8 @@ export class OneCVacuumAccessory {
     }
 
     this.isUpdating = true;
+    this.updateStartedAt = now;
+    const token = ++this.updateToken;
     try {
       const props = await this.client.getProperties([
         { siid: 3, piid: 1 }, // Fault
@@ -292,7 +337,10 @@ export class OneCVacuumAccessory {
       this.platform.log.error('Error updating status:', e.message);
       this.platform.log.warn(`Backing off vacuum polling for ${Math.round(backoff / 1000)} seconds`);
     } finally {
-      this.isUpdating = false;
+      if (token === this.updateToken) {
+        this.isUpdating = false;
+        this.updateStartedAt = 0;
+      }
     }
   }
 

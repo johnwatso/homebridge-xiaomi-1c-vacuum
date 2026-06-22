@@ -53,6 +53,22 @@
         "maximum": 60000,
         "description": "Maximum time to wait for a local vacuum request before resetting the connection and retrying."
       },
+      "matterUpdateTimeout": {
+        "title": "Matter State Update Timeout (milliseconds)",
+        "type": "integer",
+        "default": 10000,
+        "minimum": 3000,
+        "maximum": 60000,
+        "description": "Maximum time to wait for Homebridge/Matter state updates before treating the refresh as failed."
+      },
+      "statusUpdateWatchdog": {
+        "title": "Status Update Watchdog (milliseconds)",
+        "type": "integer",
+        "default": 90000,
+        "minimum": 30000,
+        "maximum": 300000,
+        "description": "Maximum time a status refresh may stay in progress before a later poll is allowed to recover."
+      },
       "enableConsumableLogs": {
         "title": "Log Consumable Status",
         "type": "boolean",
