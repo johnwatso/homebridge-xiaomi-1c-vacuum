@@ -51,6 +51,7 @@ const WORK_MODE_ROOM = 18;
 const DEFAULT_MATTER_UPDATE_TIMEOUT_MS = 10000;
 const DEFAULT_STATUS_UPDATE_WATCHDOG_MS = 90000;
 const DEFAULT_POLL_INTERVAL_SECONDS = 30;
+const IDENTIFY_DEDUP_WINDOW_MS = 2000;
 // Mi Home changes are not pushed over the local miIO transport. Keep the
 // Matter view fresh enough that Siri does not act on an old docked state.
 const EXTERNAL_STATE_POLL_INTERVAL_MS = 5000;
@@ -77,6 +78,7 @@ export class OneCVacuumAccessory {
   private nextAllowedUpdate = 0;
   private readonly lastClusterState = new Map<string, string>();
   private lastConsumableSummary = '';
+  private lastIdentifyAt = Number.NEGATIVE_INFINITY;
   private readonly matterUpdateTimeoutMs: number;
   private readonly statusUpdateWatchdogMs: number;
   private readonly pollIntervalMs: number;
@@ -104,8 +106,23 @@ export class OneCVacuumAccessory {
     this.accessory.handlers = {
       identify: {
         identify: async () => {
+          const now = Date.now();
+          if (now - this.lastIdentifyAt < IDENTIFY_DEDUP_WINDOW_MS) {
+            this.platform.log.debug('Ignoring duplicate Matter Identify command');
+            return;
+          }
+          this.lastIdentifyAt = now;
+
           this.platform.log.info('Matter: Identify command');
-          await this.client.doAction(17, 1); // Locate vacuum / play prompt
+          try {
+            await this.client.doAction(17, 1); // Locate vacuum / play prompt
+          } catch (error) {
+            // Do not suppress a controller retry when the locate action itself failed.
+            if (this.lastIdentifyAt === now) {
+              this.lastIdentifyAt = Number.NEGATIVE_INFINITY;
+            }
+            throw error;
+          }
           this.scheduleStatusUpdate();
         },
       },

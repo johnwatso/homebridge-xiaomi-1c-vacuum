@@ -41,7 +41,7 @@ function createFixture(t, config = {}, propertyValues = {}) {
   const platform = { api: { matter }, config, log: logger() };
 
   const controller = new OneCVacuumAccessory(platform, accessory, client);
-  return { accessory, actions, controller, intervals, updates };
+  return { accessory, actions, client, controller, intervals, updates };
 }
 
 test('maps a cleaning status response to Matter clusters', async t => {
@@ -67,6 +67,44 @@ test('go-home handler sends the expected action and optimistic Matter state', as
     { uuid: 'test-vacuum', cluster: 'rvcOperationalState', payload: { operationalState: 64 } },
     { uuid: 'test-vacuum', cluster: 'rvcRunMode', payload: { currentMode: 0 } },
   ]);
+});
+
+test('coalesces duplicate Matter Identify commands', async t => {
+  const { accessory, actions } = createFixture(t);
+
+  await accessory.handlers.identify.identify();
+  await accessory.handlers.identify.identify();
+
+  assert.deepEqual(actions, [[17, 1]]);
+});
+
+test('allows another Matter Identify command after the deduplication window', async t => {
+  let now = 10000;
+  t.mock.method(Date, 'now', () => now);
+  const { accessory, actions } = createFixture(t);
+
+  await accessory.handlers.identify.identify();
+  now += 2000;
+  await accessory.handlers.identify.identify();
+
+  assert.deepEqual(actions, [[17, 1], [17, 1]]);
+});
+
+test('allows an immediate Matter Identify retry after a failed locate action', async t => {
+  const { accessory, actions, client } = createFixture(t);
+  let shouldFail = true;
+  client.doAction = async (...args) => {
+    actions.push(args);
+    if (shouldFail) {
+      shouldFail = false;
+      throw new Error('locate failed');
+    }
+  };
+
+  await assert.rejects(accessory.handlers.identify.identify(), /locate failed/);
+  await accessory.handlers.identify.identify();
+
+  assert.deepEqual(actions, [[17, 1], [17, 1]]);
 });
 
 test('checks Mi Home state every five seconds without changing the full poll interval', t => {
