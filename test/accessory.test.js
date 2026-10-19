@@ -15,6 +15,7 @@ function createFixture(t, config = {}, propertyValues = {}) {
 
   const updates = [];
   const actions = [];
+  const clientCalls = [];
   const matter = {
     clusterNames: {
       RvcOperationalState: 'rvcOperationalState',
@@ -27,7 +28,10 @@ function createFixture(t, config = {}, propertyValues = {}) {
     },
   };
   const client = {
-    doAction: async (...args) => { actions.push(args); },
+    doAction: async (...args) => {
+      actions.push(args);
+      clientCalls.push({ method: 'doAction', args });
+    },
     getProperties: async () => [
       { siid: 3, piid: 1, value: propertyValues.fault ?? 0 },
       { siid: 3, piid: 2, value: propertyValues.status ?? 1 },
@@ -35,13 +39,15 @@ function createFixture(t, config = {}, propertyValues = {}) {
       { siid: 2, piid: 2, value: propertyValues.charging ?? 2 },
       { siid: 18, piid: 6, value: propertyValues.cleaningMode ?? 3 },
     ],
-    setProperty: async () => {},
+    setProperty: async (...args) => {
+      clientCalls.push({ method: 'setProperty', args });
+    },
   };
   const accessory = { UUID: 'test-vacuum', handlers: {} };
   const platform = { api: { matter }, config, log: logger() };
 
   const controller = new OneCVacuumAccessory(platform, accessory, client);
-  return { accessory, actions, client, controller, intervals, updates };
+  return { accessory, actions, client, clientCalls, controller, intervals, updates };
 }
 
 test('maps a cleaning status response to Matter clusters', async t => {
@@ -66,6 +72,44 @@ test('go-home handler sends the expected action and optimistic Matter state', as
   assert.deepEqual(updates, [
     { uuid: 'test-vacuum', cluster: 'rvcOperationalState', payload: { operationalState: 64 } },
     { uuid: 'test-vacuum', cluster: 'rvcRunMode', payload: { currentMode: 0 } },
+  ]);
+});
+
+test('reapplies the selected suction mode before starting a clean', async t => {
+  const { accessory, clientCalls } = createFixture(t);
+
+  await accessory.handlers.rvcCleanMode.changeToMode({ newMode: 3 });
+  clientCalls.length = 0;
+  await accessory.handlers.rvcRunMode.changeToMode({ newMode: 1 });
+
+  assert.deepEqual(clientCalls, [
+    { method: 'setProperty', args: [18, 6, 3] },
+    { method: 'doAction', args: [3, 1] },
+  ]);
+});
+
+test('does not let an idle status poll overwrite a pending suction selection', async t => {
+  const { accessory, clientCalls, controller } = createFixture(t, {}, { cleaningMode: 0 });
+
+  await accessory.handlers.rvcCleanMode.changeToMode({ newMode: 3 });
+  await controller.updateStatus();
+  clientCalls.length = 0;
+  await accessory.handlers.rvcRunMode.changeToMode({ newMode: 1 });
+
+  assert.deepEqual(clientCalls, [
+    { method: 'setProperty', args: [18, 6, 3] },
+    { method: 'doAction', args: [3, 1] },
+  ]);
+});
+
+test('uses standard suction when cleaning starts before the first status poll', async t => {
+  const { accessory, clientCalls } = createFixture(t);
+
+  await accessory.handlers.rvcRunMode.changeToMode({ newMode: 1 });
+
+  assert.deepEqual(clientCalls, [
+    { method: 'setProperty', args: [18, 6, 1] },
+    { method: 'doAction', args: [3, 1] },
   ]);
 });
 

@@ -79,6 +79,10 @@ export class OneCVacuumAccessory {
   private readonly lastClusterState = new Map<string, string>();
   private lastConsumableSummary = '';
   private lastIdentifyAt = Number.NEGATIVE_INFINITY;
+  private selectedSuctionMode = 1;
+  // Keep an explicit Matter selection authoritative until a clean starts.
+  // The vacuum can report its previous mode while it is still idle.
+  private selectedSuctionModeNeedsApply = false;
   private readonly matterUpdateTimeoutMs: number;
   private readonly statusUpdateWatchdogMs: number;
   private readonly pollIntervalMs: number;
@@ -135,7 +139,9 @@ export class OneCVacuumAccessory {
         },
         resume: async () => {
           this.platform.log.info('Matter: Resume command');
+          await this.applySelectedSuctionMode();
           await this.client.doAction(3, 1); // Start Sweep
+          this.selectedSuctionModeNeedsApply = false;
           await this.setOptimisticRunState(1, 1);
           this.scheduleStatusUpdate();
         },
@@ -150,7 +156,9 @@ export class OneCVacuumAccessory {
         changeToMode: async (args: any) => {
           this.platform.log.info('Matter: Change to mode', args.newMode);
           if (args.newMode === 1) {
+            await this.applySelectedSuctionMode();
             await this.client.doAction(3, 1); // Start Sweep
+            this.selectedSuctionModeNeedsApply = false;
             await this.setOptimisticRunState(1, 1);
           } else {
             await this.client.doAction(3, 2); // Stop Sweep
@@ -168,6 +176,8 @@ export class OneCVacuumAccessory {
 
           this.platform.log.info(`Matter: Change suction mode to ${SUCTION_MODES[nextMode].label}`);
           await this.client.setProperty(18, 6, nextMode); // Cleaning Mode / suction level
+          this.selectedSuctionMode = nextMode;
+          this.selectedSuctionModeNeedsApply = true;
           const matter = this.platform.api.matter!;
           await this.updateClusterState(matter.clusterNames.RvcCleanMode, { currentMode: nextMode }, true);
           this.scheduleStatusUpdate(500);
@@ -221,6 +231,12 @@ export class OneCVacuumAccessory {
     const matter = this.platform.api.matter!;
     await this.updateClusterState(matter.clusterNames.RvcOperationalState, { operationalState }, true);
     await this.updateClusterState(matter.clusterNames.RvcRunMode, { currentMode }, true);
+  }
+
+  private async applySelectedSuctionMode() {
+    const mode = SUCTION_MODES.find(item => item.mode === this.selectedSuctionMode)!;
+    this.platform.log.info(`Matter: Apply ${mode.label} suction mode before cleaning`);
+    await this.client.setProperty(18, 6, mode.mode);
   }
 
   private async updateClusterState(clusterName: string, payload: Record<string, any>, force = false) {
@@ -342,9 +358,16 @@ export class OneCVacuumAccessory {
       }, force);
 
       if (cleaningMode !== undefined) {
-        await this.updateClusterState(matter.clusterNames.RvcCleanMode, {
-          currentMode: cleaningMode,
-        }, force);
+        const reportedMode = Number(cleaningMode);
+        const isSupportedMode = SUCTION_MODES.some(mode => mode.mode === reportedMode);
+        if (isSupportedMode && !this.selectedSuctionModeNeedsApply) {
+          this.selectedSuctionMode = reportedMode;
+          await this.updateClusterState(matter.clusterNames.RvcCleanMode, {
+            currentMode: reportedMode,
+          }, force);
+        } else if (!isSupportedMode) {
+          this.platform.log.warn(`Vacuum reported unsupported suction mode: ${cleaningMode}`);
+        }
       }
 
       // Battery (PowerSource cluster)
