@@ -51,7 +51,7 @@
         "default": 15000,
         "minimum": 3000,
         "maximum": 60000,
-        "description": "Maximum time to wait for a local vacuum request before resetting the connection and retrying."
+        "description": "Total time allowed for a local vacuum request, including connection setup and UDP retries."
       },
       "matterUpdateTimeout": {
         "title": "Matter State Update Timeout (milliseconds)",

@@ -47,7 +47,7 @@ function createFixture(t, config = {}, propertyValues = {}) {
   const platform = { api: { matter }, config, log: logger() };
 
   const controller = new OneCVacuumAccessory(platform, accessory, client);
-  return { accessory, actions, client, clientCalls, controller, intervals, updates, matter };
+  return { accessory, actions, client, clientCalls, controller, intervals, updates, matter, log: platform.log };
 }
 
 test('maps a cleaning status response to Matter clusters', async t => {
@@ -254,4 +254,35 @@ test('Start uses the current Matter room selection and clearing restores whole-h
   matter.getAccessoryState = async () => undefined;
   await assert.rejects(accessory.handlers.rvcRunMode.changeToMode({ newMode: 1 }), /selected rooms/);
   assert.equal(actions.length, 2);
+});
+
+test('backs off until both a valid vacuum read and Matter publication succeed', async t => {
+  let now = 1000;
+  t.mock.method(Date, 'now', () => now);
+  const { controller, client, matter, log } = createFixture(t);
+  const warn = t.mock.method(log, 'warn');
+  const info = t.mock.method(log, 'info');
+  const read = t.mock.method(client, 'getProperties');
+  read.mock.mockImplementationOnce(async () => []);
+  const publish = t.mock.method(matter, 'updateAccessoryState');
+  publish.mock.mockImplementationOnce(async () => { throw new Error('Matter unavailable'); });
+
+  await controller.updateStatus(false, false);
+  assert.match(warn.mock.calls[0].arguments[0], /no valid operating status.*10s/);
+  now += 10000;
+  await controller.updateStatus(false, false);
+  now += 19999;
+  await controller.updateStatus(false, false);
+  assert.equal(read.mock.callCount(), 2);
+  assert.equal(warn.mock.callCount(), 1);
+  assert.equal(info.mock.callCount(), 0);
+  now++;
+  await controller.updateStatus(false, false);
+  assert.match(info.mock.calls[0].arguments[0], /recovered after 30s.*2 failed polls/);
+  await controller.updateStatus(false, false);
+  assert.equal(info.mock.callCount(), 1);
+  read.mock.mockImplementationOnce(async () => { throw new Error('offline again'); });
+  await controller.updateStatus(false, false);
+  assert.equal(warn.mock.callCount(), 2);
+  assert.match(warn.mock.calls[1].arguments[0], /offline again.*10s/);
 });

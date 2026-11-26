@@ -1,10 +1,14 @@
-import miio from 'miio';
+import miio, { type MiioDevice } from 'miio';
 
-type DeviceFactory = (options: { address: string; token: string }) => Promise<any>;
-type Sleep = (milliseconds: number) => Promise<void>;
+type DeviceFactory = (options: { address: string; token: string }) => Promise<MiioDevice>;
+
+interface Connection {
+  device: Promise<MiioDevice>;
+  users: number;
+}
 
 export class XiaomiLocalClient {
-  private device: any = null;
+  private connection?: Connection;
   private readonly connectAttempts: number;
   private readonly requestTimeoutMs: number;
 
@@ -12,23 +16,10 @@ export class XiaomiLocalClient {
     private readonly log: any,
     private readonly config: any,
     private readonly deviceFactory: DeviceFactory = miio.device,
-    private readonly sleep: Sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)),
   ) {
     this.connectAttempts = Number(this.config.connectAttempts || 5);
     const requestTimeout = Number(this.config.requestTimeout);
     this.requestTimeoutMs = Number.isFinite(requestTimeout) && requestTimeout > 0 ? requestTimeout : 15000;
-  }
-
-  private async resetDevice() {
-    if (!this.device) return;
-
-    try {
-      await Promise.resolve(this.device.destroy?.());
-    } catch (e: any) {
-      this.log.debug('Failed to destroy stale Xiaomi connection:', e.message);
-    } finally {
-      this.device = null;
-    }
   }
 
   private assertMiotSuccess(result: any, label: string) {
@@ -41,84 +32,54 @@ export class XiaomiLocalClient {
   }
 
   private async callDevice(method: string, params: any, label: string) {
-    if (!this.device) await this.init();
-
+    const connection = this.connection ??= {
+      device: this.deviceFactory({ address: this.config.ip, token: this.config.token }),
+      users: 0,
+    };
+    connection.users++;
+    let expired = false;
     let timeout: NodeJS.Timeout | undefined;
     try {
       return await Promise.race([
-        this.device.call(method, params, { retries: this.connectAttempts }),
-        new Promise((_, reject) => {
-          timeout = setTimeout(
-            () => reject(new Error(`${label} timed out after ${this.requestTimeoutMs}ms`)),
-            this.requestTimeoutMs,
-          );
+        connection.device.then(device => {
+          // Discovery can finish after the deadline. Never dispatch a late command.
+          if (expired) throw new Error(`${label} expired during discovery`);
+          return device.call(method, params, { retries: this.connectAttempts });
+        }),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => {
+            expired = true;
+            reject(new Error(`${label} timed out after ${this.requestTimeoutMs}ms`));
+          }, this.requestTimeoutMs);
         }),
       ]);
+    } catch (error) {
+      if (this.connection === connection) this.connection = undefined;
+      throw error;
     } finally {
-      if (timeout) clearTimeout(timeout);
-    }
-  }
-
-  async init() {
-    try {
-      await this.resetDevice();
-      this.log.info(`Connecting to Xiaomi device at ${this.config.ip}:54321`);
-      this.device = await this.deviceFactory({
-        address: this.config.ip,
-        token: this.config.token,
-      });
-      this.log.info('Xiaomi Local LAN connection initialized');
-    } catch (e: any) {
-      await this.resetDevice();
-      this.log.error(`Failed to connect to Xiaomi device locally at ${this.config.ip}:54321: ${e.message}`);
-      this.log.error('Check that the vacuum is awake, on the same network/VLAN, reachable on UDP port 54321, and that the local token is correct.');
-      throw e;
+      clearTimeout(timeout);
+      connection.users--;
+      if (connection.users === 0 && this.connection !== connection) {
+        // Retire only this handle, after every overlapping caller has finished.
+        void connection.device.then(device => device.destroy(), () => {}).catch(error => {
+          this.log.debug('Failed to destroy stale Xiaomi connection:', error.message);
+        });
+      }
     }
   }
 
   async getProperties(props: { siid: number; piid: number }[]) {
-    const maxRetries = 3;
-    let attempt = 0;
-    let lastError: Error | undefined;
+    const miotProps = props.map(prop => ({ did: String(this.config.deviceId), ...prop }));
+    const results = await this.callDevice('get_properties', miotProps, 'get_properties');
+    this.log.debug('Received local property result:', JSON.stringify(results));
+    if (!Array.isArray(results)) throw new Error('Unexpected response format from get_properties');
+    this.assertMiotSuccess(results, 'get_properties');
 
-    while (attempt < maxRetries) {
-      try {
-        const miotProps = props.map(p => ({
-          did: String(this.config.deviceId),
-          siid: p.siid,
-          piid: p.piid,
-        }));
-        
-        const results = await this.callDevice('get_properties', miotProps, 'get_properties');
-        this.log.debug('Received local property result:', JSON.stringify(results));
-        
-        if (!Array.isArray(results)) {
-          throw new Error('Unexpected response format from get_properties');
-        }
-        this.assertMiotSuccess(results, 'get_properties');
-
-        return results.map((res: any, i: number) => {
-          const prop = props[i];
-          const siid = res?.siid !== undefined ? res.siid : prop?.siid;
-          const piid = res?.piid !== undefined ? res.piid : prop?.piid;
-          return {
-            siid,
-            piid,
-            value: res?.value !== undefined ? res.value : res,
-          };
-        }).filter(item => item.siid !== undefined && item.piid !== undefined);
-      } catch (e: any) {
-        attempt++;
-        lastError = e instanceof Error ? e : new Error(String(e));
-        this.log.warn(`Failed to get local properties (attempt ${attempt}/${maxRetries}):`, e.message);
-        await this.resetDevice();
-        if (attempt < maxRetries) {
-          await this.sleep(2000 * attempt);
-        }
-      }
-    }
-
-    throw new Error(`Failed to get local properties after ${maxRetries} attempts: ${lastError?.message ?? 'Unknown error'}`);
+    return results.map((res: any, i: number) => ({
+      siid: res?.siid ?? props[i]?.siid,
+      piid: res?.piid ?? props[i]?.piid,
+      value: res?.value !== undefined ? res.value : res,
+    })).filter(item => item.siid !== undefined && item.piid !== undefined);
   }
 
   async doAction(siid: number, aiid: number, params: any[] = []) {
@@ -135,7 +96,6 @@ export class XiaomiLocalClient {
       return result;
     } catch (e: any) {
       this.log.error('Failed to execute local action:', e.message);
-      await this.resetDevice();
       throw e;
     }
   }
@@ -154,7 +114,6 @@ export class XiaomiLocalClient {
       return result;
     } catch (e: any) {
       this.log.error('Failed to set local property:', e.message);
-      await this.resetDevice();
       throw e;
     }
   }
@@ -165,7 +124,6 @@ export class XiaomiLocalClient {
       return result;
     } catch (e: any) {
       this.log.error('Failed to fetch local device info:', e.message);
-      await this.resetDevice();
       throw e;
     }
   }

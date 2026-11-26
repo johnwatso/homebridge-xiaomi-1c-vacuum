@@ -75,6 +75,7 @@ export class OneCVacuumAccessory {
   private updateStartedAt = 0;
   private updateToken = 0;
   private consecutiveFailures = 0;
+  private outageStartedAt = 0;
   private nextAllowedUpdate = 0;
   private readonly lastClusterState = new Map<string, string>();
   private lastConsumableSummary = '';
@@ -307,10 +308,13 @@ export class OneCVacuumAccessory {
         ]) : []),
       ]);
 
-      if (!props || props.length === 0) return;
+      if (token !== this.updateToken) return;
 
       const fault = props.find((p: any) => p.siid === 3 && p.piid === 1)?.value;
       const status = props.find((p: any) => p.siid === 3 && p.piid === 2)?.value;
+      if (typeof status !== 'number' || !Number.isFinite(status)) {
+        throw new Error('Vacuum poll returned no valid operating status');
+      }
       const battery = props.find((p: any) => p.siid === 2 && p.piid === 1)?.value;
       const charging = props.find((p: any) => p.siid === 2 && p.piid === 2)?.value;
       const cleaningMode = props.find((p: any) => p.siid === 18 && p.piid === 6)?.value;
@@ -327,8 +331,6 @@ export class OneCVacuumAccessory {
       if (includeConsumables) {
         this.logConsumables(consumables);
       }
-      this.consecutiveFailures = 0;
-      this.nextAllowedUpdate = 0;
 
       // Map Dreame 1C status to Matter RVC Operational State.
       // DeviceStatus: 1 Sweeping, 2 Idle, 3 Paused, 4 Error, 5 GoCharging, 6 Charging, 12 SweepingAndMopping, 13 ChargingComplete
@@ -391,13 +393,23 @@ export class OneCVacuumAccessory {
         }, force);
       }
 
+      if (token !== this.updateToken) return;
+      if (this.consecutiveFailures > 0) {
+        const seconds = Math.round((Date.now() - this.outageStartedAt) / 1000);
+        this.platform.log.info(`Vacuum status refresh recovered after ${seconds}s (${this.consecutiveFailures} failed polls)`);
+      }
+      this.consecutiveFailures = 0;
+      this.nextAllowedUpdate = 0;
     } catch (e: any) {
+      if (token !== this.updateToken) return;
+      if (this.consecutiveFailures === 0) this.outageStartedAt = now;
       this.consecutiveFailures++;
       const baseInterval = Math.min(this.pollIntervalMs, EXTERNAL_STATE_POLL_INTERVAL_MS);
       const backoff = Math.min(baseInterval * 2 ** this.consecutiveFailures, 5 * 60 * 1000);
       this.nextAllowedUpdate = Date.now() + backoff;
-      this.platform.log.error('Error updating status:', e.message);
-      this.platform.log.warn(`Backing off vacuum polling for ${Math.round(backoff / 1000)} seconds`);
+      const message = `Vacuum status refresh failed: ${e.message}. Next poll in ${backoff / 1000}s`;
+      if (this.consecutiveFailures === 1) this.platform.log.warn(message);
+      else this.platform.log.debug(message);
     } finally {
       if (token === this.updateToken) {
         this.isUpdating = false;
