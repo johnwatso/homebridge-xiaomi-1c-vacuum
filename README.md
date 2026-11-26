@@ -120,7 +120,10 @@ Once Homebridge starts, check the logs for the **Matter QR Code**. Scan this cod
 ## Mi Home Remote Control and Siri
 If you use Mi Home's manual remote control to move the vacuum away from its dock—for example, to retrieve it from under furniture—Homebridge refreshes the core operational state every five seconds. On version 1.1.6 or later, Siri should then be able to send the vacuum back to its dock normally.
 
-If Apple Home still shows an old state, wait a few seconds after moving the vacuum before asking Siri. The **Return to Dock** control in the Home app can also send the command directly.
+If Apple Home still shows an old state, wait a few seconds after moving the vacuum before asking Siri. For a dedicated Home tile, enable **Show Return to Dock Switch** (`enableReturnToDockSwitch`) and restart the plugin. The tile is a Matter outlet named **Return to Dock** on the Homebridge Matter bridge. If you paired only the vacuum, also pair that bridge with Home. Turn the tile on to send the vacuum home. It switches itself off after the command succeeds and can be used in scenes and automations.
+
+## Room cleaning
+Enable **Room Cleaning (Experimental)** and configure the room IDs from the vacuum’s saved map. Select the rooms in your Matter controller, then press Start. You can edit the selection before starting. Clear it to return to whole-home cleaning. Room runs use the configured room suction and repeat count.
 
 ## Support
 If you run into setup problems, local miIO timeouts, Homebridge/Matter pairing issues, or model-specific quirks, please open a [GitHub issue](https://github.com/johnwatso/homebridge-xiaomi-1c-vacuum/issues).

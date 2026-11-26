@@ -134,7 +134,7 @@ export class OneCVacuumAccessory {
         pause: async () => {
           this.platform.log.info('Matter: Pause command');
           await this.client.doAction(3, 2); // Stop Sweep
-          await this.setOptimisticRunState(2, 0);
+          await this.setOptimisticRunState(2, 1);
           this.scheduleStatusUpdate();
         },
         resume: async () => {
@@ -145,19 +145,19 @@ export class OneCVacuumAccessory {
           await this.setOptimisticRunState(1, 1);
           this.scheduleStatusUpdate();
         },
-        goHome: async () => {
-          this.platform.log.info('Matter: Go Home command');
-          await this.client.doAction(2, 1); // Start Charge
-          await this.setOptimisticRunState(64, 0);
-          this.scheduleStatusUpdate();
-        },
+        goHome: () => this.returnToDock(),
       },
       rvcRunMode: {
         changeToMode: async (args: any) => {
           this.platform.log.info('Matter: Change to mode', args.newMode);
           if (args.newMode === 1) {
-            await this.applySelectedSuctionMode();
-            await this.client.doAction(3, 1); // Start Sweep
+            const areaIds = await this.getSelectedRooms();
+            if (areaIds.length) {
+              await this.startRoomClean(areaIds);
+            } else {
+              await this.applySelectedSuctionMode();
+              await this.client.doAction(3, 1);
+            }
             this.selectedSuctionModeNeedsApply = false;
             await this.setOptimisticRunState(1, 1);
           } else {
@@ -185,17 +185,6 @@ export class OneCVacuumAccessory {
       },
     };
 
-    // Experimental, opt-in: room-by-room cleaning via the ServiceArea cluster.
-    const rooms = Array.isArray(this.platform.config.rooms) ? this.platform.config.rooms : [];
-    if (this.platform.config.enableRoomCleaning === true && rooms.length > 0) {
-      this.accessory.handlers.serviceArea = {
-        selectAreas: async (args: any) => {
-          const areaIds: number[] = Array.isArray(args?.newAreas) ? args.newAreas : [];
-          await this.startRoomClean(areaIds);
-        },
-      };
-    }
-
     // Polling
     setInterval(() => this.updateStatus(), this.pollIntervalMs);
     setInterval(() => this.updateStatus(false, false), EXTERNAL_STATE_POLL_INTERVAL_MS);
@@ -206,12 +195,25 @@ export class OneCVacuumAccessory {
     setTimeout(() => this.updateStatus(true), delay);
   }
 
-  private async startRoomClean(areaIds: number[]) {
-    if (!areaIds.length) {
-      this.platform.log.warn('Room clean requested with no areas selected; ignoring.');
-      return;
-    }
+  async returnToDock() {
+    this.platform.log.info('Matter: Go Home command');
+    await this.client.doAction(2, 1);
+    this.scheduleStatusUpdate();
+    await this.setOptimisticRunState(64, 0);
+  }
 
+  private async getSelectedRooms(): Promise<number[]> {
+    if (!this.accessory.clusters?.serviceArea) return [];
+    // Read the selection accepted by the Matter ServiceArea server, including
+    // edits and clears made by other controllers before Start.
+    const state = await this.platform.api.matter!.getAccessoryState(this.accessory.UUID, 'serviceArea');
+    if (!Array.isArray(state?.selectedAreas)) {
+      throw new Error('Cannot read the selected rooms for this clean');
+    }
+    return state.selectedAreas;
+  }
+
+  private async startRoomClean(areaIds: number[]) {
     const repeats = Number(this.platform.config.roomCleanRepeats ?? 1);
     const suction = Number(this.platform.config.roomCleanSuction ?? 2);
     // mc1808 selects tuple: [roomId, repeats, suction, 3, 1]
@@ -223,8 +225,6 @@ export class OneCVacuumAccessory {
       { piid: WORK_MODE_PIID, value: WORK_MODE_ROOM },
       { piid: CLEAN_INFO_PIID, value: cleanInfo },
     ]);
-    await this.setOptimisticRunState(1, 1);
-    this.scheduleStatusUpdate();
   }
 
   private async setOptimisticRunState(operationalState: number, currentMode: number) {
@@ -354,7 +354,7 @@ export class OneCVacuumAccessory {
 
       // Map to RvcRunMode
       await this.updateClusterState(matter.clusterNames.RvcRunMode, {
-        currentMode: [1, 7, 12].includes(status) ? 1 : 0,
+        currentMode: [1, 3, 7, 12].includes(status) ? 1 : 0,
       }, force);
 
       if (cleaningMode !== undefined) {

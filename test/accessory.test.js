@@ -47,7 +47,7 @@ function createFixture(t, config = {}, propertyValues = {}) {
   const platform = { api: { matter }, config, log: logger() };
 
   const controller = new OneCVacuumAccessory(platform, accessory, client);
-  return { accessory, actions, client, clientCalls, controller, intervals, updates };
+  return { accessory, actions, client, clientCalls, controller, intervals, updates, matter };
 }
 
 test('maps a cleaning status response to Matter clusters', async t => {
@@ -215,4 +215,43 @@ test('does not report an idle vacuum moved with Mi Home remote control as docked
     cluster: 'powerSource',
     payload: { batPercentRemaining: 200, batChargeState: 3 },
   });
+});
+
+test('an active clean stays in Cleaning run mode across pause and polling', async t => {
+  const { accessory, controller, updates } = createFixture(t, {}, { status: 3 });
+  await accessory.handlers.rvcOperationalState.pause();
+  assert.deepEqual(updates.slice(0, 2).map(update => update.payload), [
+    { operationalState: 2 }, { currentMode: 1 },
+  ]);
+  await controller.updateStatus(true);
+  assert.deepEqual(updates.slice(2, 4).map(update => update.payload), [
+    { operationalState: 2 }, { currentMode: 1 },
+  ]);
+});
+
+test('Start uses the current Matter room selection and clearing restores whole-home cleaning', async t => {
+  const { accessory, actions, clientCalls, matter } = createFixture(t, {
+    roomCleanRepeats: 2, roomCleanSuction: 3,
+  });
+  accessory.clusters = { serviceArea: {} };
+  let selectedAreas = [4];
+  matter.getAccessoryState = async (uuid, cluster) => {
+    assert.equal(uuid, accessory.UUID);
+    assert.equal(cluster, 'serviceArea');
+    return { selectedAreas };
+  };
+  selectedAreas = [7, 9];
+  assert.deepEqual(actions, []);
+  await accessory.handlers.rvcRunMode.changeToMode({ newMode: 1 });
+  assert.deepEqual(actions, [[18, 1, [
+    { piid: 1, value: 18 },
+    { piid: 21, value: JSON.stringify({ selects: [[7, 2, 3, 3, 1], [9, 2, 3, 3, 1]] }) },
+  ]]]);
+  selectedAreas = [];
+  clientCalls.length = 0;
+  await accessory.handlers.rvcRunMode.changeToMode({ newMode: 1 });
+  assert.deepEqual(clientCalls.map(call => call.args), [[18, 6, 1], [3, 1]]);
+  matter.getAccessoryState = async () => undefined;
+  await assert.rejects(accessory.handlers.rvcRunMode.changeToMode({ newMode: 1 }), /selected rooms/);
+  assert.equal(actions.length, 2);
 });

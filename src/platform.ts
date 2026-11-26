@@ -1,10 +1,11 @@
-import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig } from 'homebridge';
+import { API, DynamicPlatformPlugin, Logger, MatterAccessory, PlatformAccessory, PlatformConfig } from 'homebridge';
 import { isIP } from 'node:net';
 import { OneCVacuumAccessory } from './accessory.js';
 import { XiaomiLocalClient } from './mi-local.js';
 
 export class OneCMatterPlatform implements DynamicPlatformPlugin {
   public readonly accessories: PlatformAccessory[] = [];
+  private cachedDockSwitch?: MatterAccessory;
   public client?: XiaomiLocalClient;
 
   constructor(
@@ -21,6 +22,12 @@ export class OneCMatterPlatform implements DynamicPlatformPlugin {
   configureAccessory(accessory: PlatformAccessory) {
     this.log.info('Loading accessory from cache:', accessory.displayName);
     this.accessories.push(accessory);
+  }
+
+  configureMatterAccessory(accessory: MatterAccessory) {
+    if (accessory.context?.returnToDockSwitch === true) {
+      this.cachedDockSwitch = accessory;
+    }
   }
 
   async discoverDevices() {
@@ -142,8 +149,42 @@ export class OneCMatterPlatform implements DynamicPlatformPlugin {
         this.log.info(`Experimental room cleaning enabled with ${rooms.length} room(s).`);
       }
 
-      new OneCVacuumAccessory(this, accessory, this.client);
+      const vacuum = new OneCVacuumAccessory(this, accessory, this.client);
       await matter.registerPlatformAccessories('homebridge-1c-matter', 'OneCMatter', [accessory]);
+
+      if (this.config.enableReturnToDockSwitch === true) {
+        const dockUuid = this.api.hap.uuid.generate(`${uuid}:return-to-dock`);
+        const reset = () => matter.updateAccessoryState(dockUuid, 'onOff', { onOff: false });
+        const on = async () => {
+          await vacuum.returnToDock();
+          // Homebridge commits On after the command handler returns.
+          setTimeout(() => reset().catch(error => this.log.error('Could not reset dock switch:', error)), 500);
+        };
+        const dockSwitch: MatterAccessory = {
+          UUID: dockUuid,
+          displayName: 'Return to Dock',
+          deviceType: matter.deviceTypes.OnOffOutlet,
+          serialNumber: `${this.config.deviceId}-dock`,
+          manufacturer: 'Xiaomi',
+          model: '1C Dock Control',
+          context: { returnToDockSwitch: true },
+          clusters: { onOff: { onOff: false } },
+          handlers: {
+            onOff: {
+              on,
+              off: async () => {},
+              toggle: async () => {
+                const state = await matter.getAccessoryState(dockUuid, 'onOff');
+                if (!state?.onOff) await on();
+              },
+            },
+          },
+        };
+        await matter.registerPlatformAccessories('homebridge-1c-matter', 'OneCMatter', [dockSwitch]);
+        await reset();
+      } else if (this.cachedDockSwitch) {
+        await matter.unregisterPlatformAccessories('homebridge-1c-matter', 'OneCMatter', [this.cachedDockSwitch]);
+      }
     } else {
       this.log.warn('Matter is NOT enabled. This plugin is optimized for Matter but will fallback to legacy mode if implemented.');
       // Legacy fallback could be implemented here if desired, but user wants Matter.

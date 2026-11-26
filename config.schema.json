@@ -83,6 +83,12 @@
         "maximum": 100,
         "description": "Warn when filter or brush life is at or below this percentage."
       },
+      "enableReturnToDockSwitch": {
+        "title": "Show Return to Dock Switch",
+        "type": "boolean",
+        "default": false,
+        "description": "Add a momentary Return to Dock control to the Matter bridge for Home tiles, scenes and automations."
+      },
       "enableRoomCleaning": {
         "title": "Enable Room Cleaning (Experimental)",
         "type": "boolean",
